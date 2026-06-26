@@ -6,16 +6,18 @@ App desktop (Electron + React + TypeScript) para criar e simular campeonatos de 
 
 ## Funcionalidades
 
-- **2 esportes** — Futebol (gols, posse, finalizações, cartões) e E-sports (mapas, KDA, MVP).
-- **4 formatos** — Pontos Corridos, Mata-Mata, Grupos + Mata-Mata e Sistema Suíço.
-- **Times** — clubes europeus e brasileiros, seleções e times de e-sports pré-definidos, além de **criação de times** (nome, força 1–100, cor e logo opcional).
-- **Força x sorte** — cada time tem força de 1 a 100; ative **"100% aleatório"** antes de iniciar para ignorar a força.
-- **Simulação flexível** — simule **uma partida**, **uma rodada** ou **tudo de uma vez** ("Aleatorizar tudo").
-- **Prorrogação + pênaltis** no mata-mata, com chaveamento visual.
-- **Estatísticas** por partida (card compacto + modal com detalhes).
-- **Histórico acumulado** — galeria de campeões, ranking de times, artilharia/abates e confrontos diretos.
-- **Salvar / carregar** campeonatos em arquivo JSON.
-- Interface em **português (PT-BR)**, tema escuro com vermelho sangue.
+- **2 esportes** — Futebol (gols, posse, finalizações, cartões) e E-sports (mapas, KDA, MVP), com **CS2 e Valorant** (elencos reais distintos por jogo).
+- **6 formatos** — Pontos Corridos, Mata-Mata (com opção **ida e volta** / placar agregado), Grupos + Mata-Mata, Sistema Suíço e **Liga + Playoffs**.
+- **Times** — ~100 clubes (Europa + Brasil + várias ligas), seleções e ~46 orgs de e-sports, todos com **escudo/logo e elenco reais**; além de **criação de times** (nome, força 1–100 em 3 setores, cor e logo opcional) e edição de qualquer time/elenco.
+- **20 modelos de campeonato** que já auto-selecionam os clubes (Champions, Copa do Mundo, Brasileirão, Libertadores, CS Major, VCT…).
+- **Fator zebra** — 4 níveis (Realista / Equilibrado / Caótico / Loteria) regulam o quanto a sorte pesa sobre a força; **Forma/embalo** opcional (🔥/❄️).
+- **Simulação flexível** — simule **uma partida**, **uma rodada**, **a fase** ou **tudo de uma vez**; **prorrogação + pênaltis** no mata-mata, com chaveamento visual e zoom.
+- **Monte Carlo** — re-simula o campeonato N vezes (1×…100×) e mostra um ranking de campeões.
+- **Modo Temporada** — acompanhe times por vários anos numa sequência de campeonatos, com evolução de força, **Hall da Fama** (recordes gerais e por temporada) e cerimônia de encerramento.
+- **Narrativa** — feed de lances na partida, manchetes e jogo/zebra da rodada e resumo narrado do torneio.
+- **Estatísticas** — evolução de pontos, corrida do ranking animada e confrontos diretos.
+- **Histórico acumulado**, **biblioteca local** e **salvar / carregar** em arquivo JSON.
+- Interface em **português (PT-BR)**, visual **"Almanaque"** (osso quente + acento vermelho, serifa Fraunces).
 
 ## Como rodar (desenvolvimento)
 
