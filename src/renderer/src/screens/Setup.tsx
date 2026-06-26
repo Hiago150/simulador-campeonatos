@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ArrowLeft,
   Check,
@@ -36,6 +36,14 @@ const CATEGORY_LABEL: Record<TeamCategory, string> = {
   custom: 'Meus times'
 }
 
+// divisor de n (entre 2 e n/2) mais próximo de `target` — mantém grupos válidos
+function nearestDivisor(n: number, target: number): number | null {
+  const divs: number[] = []
+  for (let d = 2; d <= Math.floor(n / 2); d++) if (n % d === 0) divs.push(d)
+  if (divs.length === 0) return null
+  return divs.reduce((best, d) => (Math.abs(d - target) < Math.abs(best - target) ? d : best), divs[0])
+}
+
 const CHAOS_LEVELS = [
   { value: 0, label: 'Realista', hint: 'A força manda — favoritos quase sempre vencem.' },
   { value: 0.35, label: 'Equilibrado', hint: 'A força conta, mas zebras acontecem.' },
@@ -59,7 +67,7 @@ export function SetupScreen() {
   const [search, setSearch] = useState('')
   const [catFilter, setCatFilter] = useState<TeamCategory | 'all'>('all')
   const [preset, setPreset] = useState<string | null>(null)
-  const [modelsOpen, setModelsOpen] = useState(false)
+  const [modelsOpen, setModelsOpen] = useState(true)
   const [presetsOpen, setPresetsOpen] = useState(false)
 
   // config
@@ -165,6 +173,21 @@ export function SetupScreen() {
       }),
     [format, selected.length, groupCount, qualifiers, swissRounds, homeAndAway, bestOf, sport, game, playoffQualifiers, twoLeggedKO]
   )
+
+  // auto-ajuste: mantém grupos/classificados/rodadas/playoffs válidos para o nº
+  // de times escolhido — em vez de só acusar erro depois de iniciar
+  useEffect(() => {
+    const n = selected.length
+    if (n < 2) return
+    setPlayoffQualifiers((q) => Math.max(2, Math.min(q, n)))
+    setSwissRounds((r) => Math.max(1, Math.min(r, n - 1)))
+    if (format === 'groups') {
+      const gc = nearestDivisor(n, groupCount)
+      if (gc && gc !== groupCount) setGroupCount(gc)
+      const perGroup = Math.floor(n / (gc ?? groupCount))
+      setQualifiers((q) => Math.max(1, Math.min(q, Math.max(1, perGroup - 1))))
+    }
+  }, [selected.length, format, groupCount])
 
   const handleStart = () => {
     if (errors.length > 0) return
@@ -626,10 +649,18 @@ export function SetupScreen() {
                 </ul>
               </div>
             )}
+          </div>
+        </div>
 
+        {/* Barra de ação fixa — resumo + Iniciar sempre visíveis ao rolar */}
+        <div className="sticky bottom-0 z-20 -mx-8 mt-6 border-t border-paper/10 bg-ink-950/90 px-8 py-3 backdrop-blur">
+          <div className="flex items-center justify-between gap-4">
+            <p className="hidden min-w-0 flex-1 truncate text-sm text-zinc-400 sm:block">
+              {errors.length > 0 ? <span className="text-amber-300">{errors[0]}</span> : structureSummary}
+            </p>
             <Button
               variant="primary"
-              className="py-3.5 text-base"
+              className="shrink-0 px-7 py-3 text-base"
               disabled={errors.length > 0}
               icon={<Rocket size={18} />}
               onClick={handleStart}

@@ -1,12 +1,20 @@
-import { ArrowRight, ArrowUpRight, Download, Trophy } from 'lucide-react'
+import { ArrowRight, ArrowUpRight, CalendarDays, Download, Shuffle, Trophy } from 'lucide-react'
 import { useApp } from '../store/app'
 import { useHistory } from '../store/history'
 import { PRESET_TEAMS } from '../data/teams'
 import { FORMATS, FORMAT_META } from '../lib/meta'
 import { progress } from '../engine/selectors'
+import { CHAMPIONSHIP_PRESETS } from '../data/championships'
+import { championshipInput, randomInput } from '../lib/quickstart'
 import { TeamBadge } from '../components/TeamBadge'
 import { Counter, Magnetic, Marquee, Reveal, RevealLines } from '../components/motionx'
 import type { Format } from '../types'
+
+// modelos em destaque para o início rápido (um clique → torneio pronto)
+const QUICK_IDS = ['champions-liga', 'copa-mundo', 'brasileirao', 'premier-league', 'cs-major', 'vct-champions']
+const QUICK_MODELS = QUICK_IDS.map((id) => CHAMPIONSHIP_PRESETS.find((c) => c.id === id)).filter(
+  (c): c is (typeof CHAMPIONSHIP_PRESETS)[number] => !!c
+)
 
 const MARQUEE_WORDS = [
   'Futebol',
@@ -15,6 +23,10 @@ const MARQUEE_WORDS = [
   'Mata-mata',
   'Grupos',
   'Suíço',
+  'Liga + Playoffs',
+  'Temporada',
+  'Fator zebra',
+  'Narração',
   'Aleatorize',
   'Conquiste'
 ]
@@ -24,6 +36,9 @@ export function HomeScreen() {
   const newTournament = useApp((s) => s.newTournament)
   const go = useApp((s) => s.go)
   const importFromFile = useApp((s) => s.importFromFile)
+  const startTournament = useApp((s) => s.startTournament)
+  const customTeams = useApp((s) => s.customTeams)
+  const teamOverrides = useApp((s) => s.teamOverrides)
   const titles = useHistory((s) => s.data.titles)
 
   const champTeam = current?.champion ? current.teams.find((t) => t.id === current.champion) : undefined
@@ -59,8 +74,9 @@ export function HomeScreen() {
 
           <Reveal delay={0.5} className="mt-12 flex flex-col gap-10 md:flex-row md:items-end md:justify-between">
             <p className="max-w-md text-base leading-relaxed text-zinc-400">
-              Quatro formatos, dois esportes, times reais ou criados por você. Sorteie resultados num
-              clique e acompanhe tabelas, chaveamentos e estatísticas — tudo num só almanaque.
+              Cinco formatos, dois esportes e centenas de times reais ou criados por você. Regule a
+              dose de zebra, simule num clique e acompanhe tabelas, chaveamentos, estatísticas e a
+              narração de cada rodada — ou conduza um time por temporadas inteiras.
             </p>
             <div className="flex items-center gap-7">
               <Magnetic strength={0.4}>
@@ -117,6 +133,38 @@ export function HomeScreen() {
           ))}
         </section>
 
+        {/* ---------------- INÍCIO RÁPIDO ---------------- */}
+        <section className="border-b border-paper/10 py-12">
+          <Reveal>
+            <div className="mb-5 flex items-baseline justify-between">
+              <h2 className="kicker">Início rápido</h2>
+              <span className="text-xs text-zinc-600">Um clique e a bola rola</span>
+            </div>
+          </Reveal>
+          <Reveal delay={0.06}>
+            <div className="flex flex-wrap gap-2.5">
+              {QUICK_MODELS.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => startTournament(championshipInput(c, customTeams, teamOverrides))}
+                  data-cursor="hover"
+                  className="flex items-center gap-2 rounded-full border border-paper/12 px-4 py-2 text-sm font-semibold text-zinc-300 transition hover:border-blood-600 hover:text-zinc-50"
+                >
+                  <span>{c.emoji}</span>
+                  {c.label}
+                </button>
+              ))}
+              <button
+                onClick={() => startTournament(randomInput(customTeams, teamOverrides))}
+                data-cursor="hover"
+                className="flex items-center gap-2 rounded-full bg-blood-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-blood-500"
+              >
+                <Shuffle size={15} /> Surpreenda-me
+              </button>
+            </div>
+          </Reveal>
+        </section>
+
         {/* ---------------- CONTINUAR ---------------- */}
         {current && prog && (
           <Reveal className="border-b border-paper/10">
@@ -163,6 +211,42 @@ export function HomeScreen() {
               <FormatRow key={f} format={f} index={i} onClick={() => newTournament(f)} />
             ))}
           </div>
+        </section>
+
+        {/* ---------------- MODO TEMPORADA ---------------- */}
+        <section className="border-t border-paper/10 pt-16">
+          <Reveal>
+            <div className="flex flex-col gap-7 md:flex-row md:items-end md:justify-between">
+              <div className="max-w-xl">
+                <h2 className="kicker mb-3">
+                  <CalendarDays size={13} className="text-blood-500" /> Modo Temporada
+                </h2>
+                <p className="display text-3xl leading-[1.05] text-zinc-100 md:text-5xl">
+                  Conduza um time por <span className="italic text-blood-500">anos</span>
+                </p>
+                <p className="mt-4 max-w-md text-sm leading-relaxed text-zinc-400">
+                  Uma sequência de campeonatos que se repete a cada temporada: artilheiros do ano,
+                  evolução de elenco, recordes e um <span className="text-zinc-200">Hall da Fama</span>{' '}
+                  que cresce ano após ano — até a cerimônia de encerramento.
+                </p>
+              </div>
+              <Magnetic strength={0.3}>
+                <button
+                  onClick={() => go('season')}
+                  data-cursor="hover"
+                  className="group inline-flex items-center gap-3 border border-paper/15 px-6 py-3.5 transition-colors hover:border-blood-600 hover:bg-blood-600"
+                >
+                  <span className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-100">
+                    Iniciar temporada
+                  </span>
+                  <ArrowRight
+                    size={16}
+                    className="text-zinc-300 transition-transform duration-300 group-hover:translate-x-1 group-hover:text-white"
+                  />
+                </button>
+              </Magnetic>
+            </div>
+          </Reveal>
         </section>
 
         {/* ---------------- CAMPEÕES ---------------- */}

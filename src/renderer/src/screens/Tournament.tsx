@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   BarChart3,
   CalendarDays,
@@ -11,6 +11,7 @@ import {
   FastForward,
   Goal,
   LayoutGrid,
+  MoreHorizontal,
   RotateCcw,
   Save,
   StepForward,
@@ -38,6 +39,7 @@ import { MatchCard } from '../components/MatchCard'
 import { MatchModal } from '../components/MatchModal'
 import { Bracket } from '../components/Bracket'
 import { FitScale } from '../components/FitScale'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import {
   matchMoments,
   roundHighlights,
@@ -93,6 +95,7 @@ export function TournamentScreen() {
 
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null)
   const [mcView, setMcView] = useState<'play' | 'mc'>('play')
+  const [confirmReset, setConfirmReset] = useState(false)
 
   const teams = useMemo(() => (t ? teamMap(t) : {}), [t])
   const roundInfo = useMemo(() => (t ? currentRoundInfo(t) : { label: '', matchIds: [] }), [t])
@@ -137,6 +140,12 @@ export function TournamentScreen() {
     else closeTournament()
   }
 
+  // Refazer apaga todos os resultados — confirma só se já houver progresso
+  const handleReset = () => {
+    if (prog.played > 0) setConfirmReset(true)
+    else reset()
+  }
+
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
@@ -172,13 +181,13 @@ export function TournamentScreen() {
 
           {/* Ações */}
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <Button icon={<Save size={15} />} onClick={saveCurrentToLibrary}>
-              Salvar na biblioteca
-            </Button>
-            <Button icon={<Download size={15} />} onClick={exportCurrent}>
-              Exportar
-            </Button>
-            <Button icon={<RotateCcw size={15} />} onClick={reset}>
+            <HeaderMenu
+              items={[
+                { label: 'Salvar na biblioteca', icon: <Save size={15} />, onClick: saveCurrentToLibrary },
+                { label: 'Exportar', icon: <Download size={15} />, onClick: exportCurrent }
+              ]}
+            />
+            <Button icon={<RotateCcw size={15} />} onClick={handleReset}>
               Refazer
             </Button>
             {!finished && (
@@ -364,11 +373,63 @@ export function TournamentScreen() {
         sport={t.sport}
         onClose={() => setSelectedMatch(null)}
       />
+
+      <ConfirmDialog
+        open={confirmReset}
+        title="Refazer o campeonato?"
+        message="Isso apaga todos os resultados já simulados e recomeça do zero. Esta ação não pode ser desfeita."
+        confirmLabel="Refazer tudo"
+        onCancel={() => setConfirmReset(false)}
+        onConfirm={() => {
+          reset()
+          setConfirmReset(false)
+        }}
+      />
     </div>
   )
 }
 
 // ---------- Subcomponentes ----------
+
+// Menu "⋯" para ações secundárias (Salvar, Exportar) — desafoga o cabeçalho
+function HeaderMenu({ items }: { items: { label: string; icon: ReactNode; onClick: () => void }[] }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [open])
+
+  return (
+    <div ref={ref} className="relative">
+      <Button icon={<MoreHorizontal size={15} />} onClick={() => setOpen((o) => !o)}>
+        Mais
+      </Button>
+      {open && (
+        <div className="absolute right-0 top-full z-30 mt-1 min-w-[200px] overflow-hidden rounded-[6px] border border-white/10 bg-ink-900 py-1 shadow-card">
+          {items.map((it, i) => (
+            <button
+              key={i}
+              onClick={() => {
+                it.onClick()
+                setOpen(false)
+              }}
+              className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm text-zinc-300 transition hover:bg-white/[0.06] hover:text-white"
+            >
+              {it.icon}
+              {it.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function NarrationPanel({
   summary,
