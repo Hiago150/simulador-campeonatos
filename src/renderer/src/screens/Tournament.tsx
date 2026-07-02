@@ -340,7 +340,7 @@ export function TournamentScreen() {
               <SwissView t={t} teams={teams} currentIds={roundInfo.matchIds} onSim={simMatch} onOpen={setSelectedMatch} />
             )}
             {t.format === 'cup' && (
-              <CupView t={t} teams={teams} onSim={simMatch} onOpen={setSelectedMatch} />
+              <CupView t={t} teams={teams} currentIds={roundInfo.matchIds} onSim={simMatch} onOpen={setSelectedMatch} />
             )}
             {t.format === 'groups' && (
               <GroupsView t={t} teams={teams} currentIds={roundInfo.matchIds} onSim={simMatch} onOpen={setSelectedMatch} />
@@ -349,7 +349,7 @@ export function TournamentScreen() {
               <LeagueView t={t} teams={teams} currentIds={roundInfo.matchIds} onSim={simMatch} onOpen={setSelectedMatch} />
             )}
             {t.format === 'league-playoffs' && t.phase !== 'league' && (
-              <CupView t={t} teams={teams} onSim={simMatch} onOpen={setSelectedMatch} />
+              <CupView t={t} teams={teams} currentIds={roundInfo.matchIds} onSim={simMatch} onOpen={setSelectedMatch} />
             )}
           </>
         )}
@@ -731,7 +731,7 @@ function RoundsList({
 function LeagueView({ t, teams, currentIds, onSim, onOpen }: ViewProps) {
   const rows = useMemo(() => leagueStandings(t), [t])
   return (
-    <div className="grid gap-5 lg:grid-cols-[1fr_minmax(340px,420px)]">
+    <div className="grid items-start gap-5 min-[960px]:grid-cols-[1fr_minmax(340px,430px)]">
       <div className="space-y-5">
         <div className="card p-4">
           <p className="mb-2 text-sm font-bold text-white">Classificação</p>
@@ -761,7 +761,7 @@ function SwissView({ t, teams, currentIds, onSim, onOpen }: ViewProps) {
     [t]
   )
   return (
-    <div className="grid gap-5 lg:grid-cols-[1fr_minmax(340px,420px)]">
+    <div className="grid items-start gap-5 min-[960px]:grid-cols-[1fr_minmax(340px,430px)]">
       <div className="card p-4">
         <p className="mb-2 text-sm font-bold text-white">Classificação · Suíço</p>
         <StandingsTable rows={rows} teams={teams} sport={t.sport} form={formMapOf(t)} />
@@ -782,13 +782,61 @@ function SwissView({ t, teams, currentIds, onSim, onOpen }: ViewProps) {
   )
 }
 
-function CupView({ t, teams, onSim, onOpen }: Omit<ViewProps, 'currentIds'>) {
+function CupView({ t, teams, currentIds, onSim, onOpen }: ViewProps) {
+  // confrontos em evidência: a fase atual — ou a decisão, se já acabou
+  const stage = useMemo(() => {
+    const ids = new Set(currentIds)
+    let ms = t.matches.filter((m) => ids.has(m.id))
+    if (ms.length === 0 && t.phase === 'finished' && t.bracket?.length) {
+      const finalRound = t.bracket[t.bracket.length - 1]
+      const finalIds = new Set(
+        finalRound.matches.flatMap((bm) => [bm.matchId, ...(bm.legIds ?? [])]).filter(Boolean)
+      )
+      ms = t.matches.filter((m) => finalIds.has(m.id))
+    }
+    return ms
+  }, [t, currentIds])
+
   if (!t.bracket) return null
+  const finished = t.phase === 'finished'
+  const stageLabel = stage[0]?.stage.split(' · ')[0] ?? ''
+
   return (
-    <div className="card p-5">
-      <FitScale>
-        <Bracket bracket={t.bracket} matches={t.matches} teams={teams} sport={t.sport} onSimulate={onSim} onOpen={onOpen} />
-      </FitScale>
+    <div className="space-y-5">
+      {stage.length > 0 && (
+        <div>
+          <div className="mb-3 flex items-center gap-2.5">
+            <span className="h-2 w-2 bg-blood-600" />
+            <h3 className="heading text-base font-bold uppercase tracking-[0.14em] text-zinc-100">
+              {finished ? 'A decisão' : stageLabel || 'Fase atual'}
+            </h3>
+            {!finished && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blood-500" />}
+            <span className="tnum ml-auto text-xs text-zinc-600">
+              {stage.filter((m) => m.played).length}/{stage.length}
+            </span>
+          </div>
+          <div className={cx('grid gap-2.5', stage.length > 1 && 'xl:grid-cols-2')}>
+            {stage.map((m) => (
+              <MatchCard
+                key={m.id}
+                match={m}
+                home={teams[m.homeId]}
+                away={teams[m.awayId]}
+                sport={t.sport}
+                onSimulate={() => onSim(m.id)}
+                onOpen={() => onOpen(m)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="card p-5">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">Chaveamento</p>
+        <FitScale>
+          <Bracket bracket={t.bracket} matches={t.matches} teams={teams} sport={t.sport} onSimulate={onSim} onOpen={onOpen} />
+        </FitScale>
+      </div>
     </div>
   )
 }
@@ -819,11 +867,15 @@ function GroupsView({ t, teams, currentIds, onSim, onOpen }: ViewProps) {
       )}
 
       {(!hasBracket || tab === 'groups') && (
-        <div className="space-y-5">
+        // visão "dia de jogo": partidas da rodada ao lado das tabelas — simula
+        // e vê o resultado + classificação mudando sem rolar a página
+        <div className="grid items-start gap-5 min-[960px]:grid-cols-[1fr_minmax(360px,430px)]">
           <div className="grid gap-4 lg:grid-cols-2">
             {(t.groups ?? []).map((g) => (
               <div key={g.id} className="card p-4">
-                <p className="mb-2 text-sm font-bold text-white">{g.name}</p>
+                <p className="mb-2 flex items-center gap-2 text-sm font-bold text-white">
+                  <span className="h-1.5 w-1.5 bg-blood-600" /> {g.name}
+                </p>
                 <StandingsTable
                   rows={standings[g.id] ?? []}
                   teams={teams}
@@ -836,7 +888,7 @@ function GroupsView({ t, teams, currentIds, onSim, onOpen }: ViewProps) {
             ))}
           </div>
           <div>
-            <p className="mb-3 text-sm font-bold text-white">Partidas da fase de grupos</p>
+            <p className="mb-3 text-sm font-bold text-white">Partidas</p>
             <RoundsList
               t={t}
               matches={groupMatches}
@@ -851,11 +903,7 @@ function GroupsView({ t, teams, currentIds, onSim, onOpen }: ViewProps) {
       )}
 
       {hasBracket && tab === 'bracket' && (
-        <div className="card p-5">
-          <FitScale>
-            <Bracket bracket={t.bracket!} matches={t.matches} teams={teams} sport={t.sport} onSimulate={onSim} onOpen={onOpen} />
-          </FitScale>
-        </div>
+        <CupView t={t} teams={teams} currentIds={currentIds} onSim={onSim} onOpen={onOpen} />
       )}
     </div>
   )

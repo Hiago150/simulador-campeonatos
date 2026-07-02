@@ -44,6 +44,11 @@ export function StandingsTable({
           {rows.map((r) => {
             const team = teams[r.teamId]
             const qualifies = qualifyCount > 0 && r.rank <= qualifyCount
+            // antes do time estrear, a linha fica "em repouso" (traços discretos
+            // em vez de um mar de zeros) — a tabela ganha vida conforme se joga
+            const idle = r.played === 0
+            const num = (v: number) =>
+              idle ? <span className="text-zinc-700">–</span> : <>{v}</>
             return (
               <tr
                 key={r.teamId}
@@ -61,30 +66,39 @@ export function StandingsTable({
                 <td className="py-1.5">
                   <div className="flex items-center gap-2.5">
                     <TeamBadge team={team} size="sm" />
-                    <span className="truncate font-semibold text-zinc-100">{team?.name ?? '—'}</span>
+                    <span className={cx('truncate font-semibold', idle ? 'text-zinc-400' : 'text-zinc-100')}>
+                      {team?.name ?? '—'}
+                    </span>
                     {form?.[r.teamId] === 'hot' && <span title="Embalado">🔥</span>}
                     {form?.[r.teamId] === 'cold' && <span title="Má fase">❄️</span>}
                   </div>
                 </td>
-                <td className="tnum py-2 text-center text-base font-bold text-white">{r.points}</td>
-                <td className="tnum py-2 text-center text-zinc-400">{r.played}</td>
-                <td className="tnum py-2 text-center text-zinc-400">{r.won}</td>
-                {!isEsports && <td className="tnum py-2 text-center text-zinc-400">{r.drawn}</td>}
-                <td className="tnum py-2 text-center text-zinc-400">{r.lost}</td>
+                <td className={cx('tnum py-2 text-center text-base font-bold', idle ? 'text-zinc-700' : 'text-white')}>
+                  {idle ? '–' : r.points}
+                </td>
+                <td className="tnum py-2 text-center text-zinc-300">{num(r.played)}</td>
+                <td className="tnum py-2 text-center text-zinc-300">{num(r.won)}</td>
+                {!isEsports && <td className="tnum py-2 text-center text-zinc-300">{num(r.drawn)}</td>}
+                <td className="tnum py-2 text-center text-zinc-300">{num(r.lost)}</td>
                 {!compact && (
                   <>
-                    <td className="tnum hidden py-2 text-center text-zinc-400 sm:table-cell">{r.goalsFor}</td>
-                    <td className="tnum hidden py-2 text-center text-zinc-400 sm:table-cell">{r.goalsAgainst}</td>
+                    <td className="tnum hidden py-2 text-center text-zinc-300 sm:table-cell">{num(r.goalsFor)}</td>
+                    <td className="tnum hidden py-2 text-center text-zinc-300 sm:table-cell">{num(r.goalsAgainst)}</td>
                   </>
                 )}
                 <td
                   className={cx(
                     'tnum py-2 text-center font-semibold',
-                    r.goalDiff > 0 ? 'text-emerald-400/80' : r.goalDiff < 0 ? 'text-blood-400/80' : 'text-zinc-500'
+                    idle
+                      ? 'text-zinc-700'
+                      : r.goalDiff > 0
+                        ? 'text-emerald-400/80'
+                        : r.goalDiff < 0
+                          ? 'text-blood-400/80'
+                          : 'text-zinc-500'
                   )}
                 >
-                  {r.goalDiff > 0 ? '+' : ''}
-                  {r.goalDiff}
+                  {idle ? '–' : (r.goalDiff > 0 ? '+' : '') + r.goalDiff}
                 </td>
               </tr>
             )
