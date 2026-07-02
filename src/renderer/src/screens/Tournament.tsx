@@ -225,7 +225,7 @@ export function TournamentScreen() {
               </Button>
             )}
             {finished && concluded && (
-              <span className="tag border-emerald-700/40 text-emerald-400">
+              <span className="tag border-win-700/40 text-win-400">
                 <Check size={12} /> Concluído
               </span>
             )}
@@ -247,7 +247,7 @@ export function TournamentScreen() {
 
         {/* Monte Carlo — controles */}
         {mcActive && (
-          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-[4px] border border-blood-800/30 bg-blood-950/15 px-3 py-2.5">
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-blood-800/30 bg-blood-950/15 px-3 py-2.5">
             <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-blood-300">
               <Dices size={14} /> Monte Carlo
             </span>
@@ -281,14 +281,14 @@ export function TournamentScreen() {
         )}
       </div>
 
-      {/* Banner de campeão */}
+      {/* Banner de campeão — a glória é dourada */}
       {finished && champ && (
-        <div className="animate-fade-up border-b border-blood-800/30 bg-gradient-to-r from-blood-950/40 via-blood-900/20 to-transparent px-6 py-4">
+        <div className="animate-fade-up border-b border-gold-600/25 bg-gradient-to-r from-gold-950/60 via-gold-950/20 to-transparent px-6 py-4">
           <div className="flex items-center gap-4">
-            <Trophy size={28} className="text-blood-400" />
+            <Trophy size={28} className="text-gold-400" />
             <TeamBadge team={champ} size="lg" />
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-blood-400">Campeão</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-gold-400">Campeão</p>
               <p className="display text-4xl text-zinc-100">{champ.name}</p>
             </div>
           </div>
@@ -411,7 +411,7 @@ function HeaderMenu({ items }: { items: { label: string; icon: ReactNode; onClic
         Mais
       </Button>
       {open && (
-        <div className="absolute right-0 top-full z-30 mt-1 min-w-[200px] overflow-hidden rounded-[6px] border border-white/10 bg-ink-900 py-1 shadow-card">
+        <div className="absolute right-0 top-full z-30 mt-1 min-w-[200px] overflow-hidden rounded-xl border border-white/10 bg-ink-900 py-1 shadow-card">
           {items.map((it, i) => (
             <button
               key={i}
@@ -442,7 +442,7 @@ function NarrationPanel({
 }) {
   if (summary) {
     return (
-      <div className="mb-5 rounded-[4px] border border-blood-800/30 bg-gradient-to-r from-blood-950/30 to-transparent p-4">
+      <div className="mb-5 rounded-xl border border-blood-800/30 bg-gradient-to-r from-blood-950/30 to-transparent p-4">
         <p className="display mb-1 text-xl text-zinc-100">{summary.headline}</p>
         <p className="text-sm leading-relaxed text-zinc-400">{summary.text}</p>
         {(summary.zebra || summary.bestGame) && (
@@ -471,7 +471,7 @@ function NarrationPanel({
 
   if (round) {
     return (
-      <div className="mb-5 rounded-[4px] border border-white/5 bg-ink-900/50 p-4">
+      <div className="mb-5 rounded-xl border border-white/5 bg-ink-900/50 p-4">
         <p className="mb-2 flex items-center gap-2 text-sm font-bold text-zinc-100">
           <span className="text-blood-400">📰</span> {round.headline}
         </p>
@@ -480,7 +480,7 @@ function NarrationPanel({
             {round.zebra && (
               <button
                 onClick={() => onOpen(round.zebra!.matchId)}
-                className="flex items-center gap-2 rounded-[4px] border border-amber-700/30 bg-amber-950/15 px-3 py-2 text-left transition hover:border-amber-600/50"
+                className="flex items-center gap-2 rounded-xl border border-amber-700/30 bg-amber-950/15 px-3 py-2 text-left transition hover:border-amber-600/50"
               >
                 <span>🐴</span>
                 <div className="min-w-0">
@@ -494,7 +494,7 @@ function NarrationPanel({
             {round.bestGame && (
               <button
                 onClick={() => onOpen(round.bestGame!.matchId)}
-                className="flex items-center gap-2 rounded-[4px] border border-blood-700/30 bg-blood-950/15 px-3 py-2 text-left transition hover:border-blood-600/50"
+                className="flex items-center gap-2 rounded-xl border border-blood-700/30 bg-blood-950/15 px-3 py-2 text-left transition hover:border-blood-600/50"
               >
                 <span>🔥</span>
                 <div className="min-w-0">
@@ -583,7 +583,7 @@ function MonteCarloPanel({
               </Button>
             </div>
           ) : (
-            <p className="px-3 py-3 text-center text-xs text-emerald-400">
+            <p className="px-3 py-3 text-center text-xs text-win-400">
               Monte Carlo concluído — {target} simulações.
             </p>
           )}
@@ -669,7 +669,7 @@ function RoundsList({
         const label = ms[0]?.stage.split(' · ')[0] ?? `Rodada ${round}`
         const played = ms.filter((m) => m.played).length
         return (
-          <div key={round} className={cx(many && 'overflow-hidden rounded-[3px] border border-paper/[0.07]')}>
+          <div key={round} className={cx(many && 'overflow-hidden rounded-xl border border-paper/[0.07]')}>
             {many ? (
               <button
                 onClick={() => toggle(round)}

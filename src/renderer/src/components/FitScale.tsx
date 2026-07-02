@@ -78,7 +78,7 @@ export function FitScale({ children, maxHeight = '72vh' }: { children: ReactNode
   }
 
   const btn =
-    'flex h-7 w-7 items-center justify-center rounded-[4px] border border-white/10 bg-ink-850 text-zinc-300 transition hover:border-blood-600/50 hover:text-white disabled:opacity-40'
+    'flex h-7 w-7 items-center justify-center rounded-xl border border-white/10 bg-ink-850 text-zinc-300 transition hover:border-blood-600/50 hover:text-white disabled:opacity-40'
 
   return (
     <div>

@@ -185,7 +185,7 @@ export function HomeScreen() {
               </div>
               {champTeam ? (
                 <div className="flex items-center gap-2">
-                  <Trophy size={16} className="text-blood-600" />
+                  <Trophy size={16} className="text-gold-400" />
                   <TeamBadge team={champTeam} size="sm" />
                   <span className="hidden text-sm font-semibold text-zinc-100 sm:block">{champTeam.name}</span>
                 </div>
@@ -258,7 +258,7 @@ export function HomeScreen() {
             <Marquee speed={24} className="border-y border-paper/10 py-5">
               {titles.slice(0, 8).map((t, i) => (
                 <span key={i} className="flex items-center gap-3 px-7">
-                  <Trophy size={14} className="text-blood-600" />
+                  <Trophy size={14} className="text-gold-400" />
                   <span className="display text-lg text-zinc-100">{t.championName}</span>
                   <span className="text-xs text-zinc-600">{t.tournamentName}</span>
                 </span>

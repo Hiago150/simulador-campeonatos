@@ -85,7 +85,7 @@ export function HistoryScreen() {
               <div className="flex flex-wrap gap-2">
                 {data.titles.map((title) => (
                   <div key={title.tournamentId} className="card flex items-center gap-3 px-4 py-2.5">
-                    <Trophy size={16} className="text-blood-400" />
+                    <Trophy size={16} className="text-gold-400" />
                     <div>
                       <p className="text-sm font-bold text-white">{title.championName}</p>
                       <p className="text-[11px] text-zinc-500">
@@ -121,7 +121,7 @@ export function HistoryScreen() {
                       <button
                         onClick={() => repeatTournament(s)}
                         title="Repetir este campeonato"
-                        className="flex h-9 shrink-0 items-center gap-1.5 rounded-[4px] border border-blood-700/40 bg-blood-950/30 px-3 text-xs font-semibold text-blood-200 transition hover:bg-blood-900/40"
+                        className="flex h-9 shrink-0 items-center gap-1.5 rounded-xl border border-blood-700/40 bg-blood-950/30 px-3 text-xs font-semibold text-blood-200 transition hover:bg-blood-900/40"
                       >
                         <RotateCw size={13} /> Repetir
                       </button>
@@ -174,7 +174,7 @@ export function HistoryScreen() {
                         <td
                           className={cx(
                             'tnum py-2 text-center font-semibold',
-                            r.goalsFor - r.goalsAgainst > 0 ? 'text-emerald-400/80' : 'text-zinc-500'
+                            r.goalsFor - r.goalsAgainst > 0 ? 'text-win-400/80' : 'text-zinc-500'
                           )}
                         >
                           {r.goalsFor - r.goalsAgainst > 0 ? '+' : ''}

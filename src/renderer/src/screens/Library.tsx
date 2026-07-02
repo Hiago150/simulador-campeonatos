@@ -125,10 +125,10 @@ function SavedCard({
                 if (e.key === 'Escape') onCancelRename()
               }}
             />
-            <button onClick={onConfirmRename} className="flex h-7 w-7 items-center justify-center rounded-[3px] border border-emerald-700/40 bg-emerald-950/30 text-emerald-300">
+            <button onClick={onConfirmRename} className="flex h-7 w-7 items-center justify-center rounded-xl border border-win-700/40 bg-win-950/30 text-win-300">
               <Check size={13} />
             </button>
-            <button onClick={onCancelRename} className="flex h-7 w-7 items-center justify-center rounded-[3px] border border-white/10 text-zinc-400">
+            <button onClick={onCancelRename} className="flex h-7 w-7 items-center justify-center rounded-xl border border-white/10 text-zinc-400">
               <X size={13} />
             </button>
           </div>
@@ -149,7 +149,7 @@ function SavedCard({
       </div>
 
       {champ ? (
-        <div className="flex items-center gap-2 rounded-[4px] border border-blood-800/30 bg-blood-950/15 px-3 py-2">
+        <div className="flex items-center gap-2 rounded-xl border border-blood-800/30 bg-blood-950/15 px-3 py-2">
           <Trophy size={15} className="text-blood-400" />
           <TeamBadge team={champ} size="sm" />
           <span className="truncate text-sm font-bold text-zinc-100">{champ.name}</span>
@@ -172,14 +172,14 @@ function SavedCard({
           <button
             onClick={onStartRename}
             title="Renomear"
-            className="flex h-8 w-8 items-center justify-center rounded-[3px] border border-white/5 bg-white/[0.03] text-zinc-300 hover:bg-white/10"
+            className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/5 bg-white/[0.03] text-zinc-300 hover:bg-white/10"
           >
             <Pencil size={13} />
           </button>
           <button
             onClick={onRemove}
             title="Excluir"
-            className="flex h-8 w-8 items-center justify-center rounded-[3px] border border-blood-800/40 bg-blood-950/30 text-blood-300 hover:bg-blood-900/40"
+            className="flex h-8 w-8 items-center justify-center rounded-xl border border-blood-800/40 bg-blood-950/30 text-blood-300 hover:bg-blood-900/40"
           >
             <Trash2 size={13} />
           </button>

@@ -17,8 +17,8 @@
     "esports-logos": "node scripts/fetch-esports-logos.mjs"
   },
   "dependencies": {
-    "@fontsource-variable/fraunces": "^5.2.9",
     "@fontsource-variable/inter": "^5.1.0",
+    "@fontsource-variable/oswald": "^5.2.8",
     "@fontsource-variable/space-grotesk": "^5.1.0",
     "clsx": "^2.1.1",
     "framer-motion": "^11.11.17",

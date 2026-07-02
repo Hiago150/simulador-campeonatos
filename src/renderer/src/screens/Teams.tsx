@@ -114,7 +114,7 @@ export function TeamsScreen() {
                           <button
                             onClick={() => setEditing(team)}
                             title="Editar"
-                            className="flex h-8 w-8 items-center justify-center rounded-[3px] border border-white/5 bg-white/[0.03] text-zinc-300 hover:bg-white/10"
+                            className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/5 bg-white/[0.03] text-zinc-300 hover:bg-white/10"
                           >
                             <Pencil size={13} />
                           </button>
@@ -125,7 +125,7 @@ export function TeamsScreen() {
                                 setToast('Time removido')
                               }}
                               title="Excluir"
-                              className="flex h-8 w-8 items-center justify-center rounded-[3px] border border-blood-800/40 bg-blood-950/30 text-blood-300 hover:bg-blood-900/40"
+                              className="flex h-8 w-8 items-center justify-center rounded-xl border border-blood-800/40 bg-blood-950/30 text-blood-300 hover:bg-blood-900/40"
                             >
                               <Trash2 size={13} />
                             </button>
@@ -137,7 +137,7 @@ export function TeamsScreen() {
                                   setToast('Edição revertida')
                                 }}
                                 title="Reverter para o original"
-                                className="flex h-8 w-8 items-center justify-center rounded-[3px] border border-white/5 bg-white/[0.03] text-zinc-400 hover:bg-white/10"
+                                className="flex h-8 w-8 items-center justify-center rounded-xl border border-white/5 bg-white/[0.03] text-zinc-400 hover:bg-white/10"
                               >
                                 <RotateCcw size={13} />
                               </button>
@@ -322,7 +322,7 @@ function TeamModal({
         </div>
 
         {showSectors && (
-          <div className="mb-6 space-y-3 rounded-[4px] border border-white/5 bg-ink-850/50 p-3">
+          <div className="mb-6 space-y-3 rounded-xl border border-white/5 bg-ink-850/50 p-3">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Setores</p>
             {(
               [
@@ -343,7 +343,7 @@ function TeamModal({
         )}
 
         {showRoster && (
-          <div className="mb-6 space-y-3 rounded-[4px] border border-white/5 bg-ink-850/50 p-3">
+          <div className="mb-6 space-y-3 rounded-xl border border-white/5 bg-ink-850/50 p-3">
             <div className="flex items-center justify-between gap-2">
               <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
                 <Users size={12} /> Elenco
@@ -381,7 +381,7 @@ function TeamModal({
               <button
                 key={c}
                 onClick={() => setColor(c)}
-                className={cx('h-8 w-8 rounded-[3px] ring-2 transition', color === c ? 'ring-white' : 'ring-transparent hover:ring-white/30')}
+                className={cx('h-8 w-8 rounded-xl ring-2 transition', color === c ? 'ring-white' : 'ring-transparent hover:ring-white/30')}
                 style={{ backgroundColor: c }}
               />
             ))}

@@ -131,7 +131,7 @@ export function MatchCard({ match, home, away, sport, onSimulate, onReRoll, onOp
                 <span
                   key={i}
                   title={mp.name}
-                  className="tnum rounded-[3px] bg-ink-900/80 px-1.5 py-0.5 text-[11px] font-semibold text-zinc-400"
+                  className="tnum rounded-xl bg-ink-900/80 px-1.5 py-0.5 text-[11px] font-semibold text-zinc-400"
                 >
                   <span className={hw ? 'text-zinc-100' : ''}>{mp.home}</span>
                   <span className="text-zinc-600">–</span>

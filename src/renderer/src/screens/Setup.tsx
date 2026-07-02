@@ -272,7 +272,7 @@ export function SetupScreen() {
         <div className="mb-6">
           <button
             onClick={() => setModelsOpen((o) => !o)}
-            className="flex w-full items-center gap-2 rounded-[4px] border border-white/5 bg-ink-850/60 px-3 py-2.5 text-left transition hover:border-blood-600/40"
+            className="flex w-full items-center gap-2 rounded-xl border border-white/5 bg-ink-850/60 px-3 py-2.5 text-left transition hover:border-blood-600/40"
           >
             <Wand2 size={14} className="text-blood-400" />
             <span className="text-xs font-semibold uppercase tracking-wide text-zinc-300">
@@ -285,7 +285,7 @@ export function SetupScreen() {
             />
           </button>
           {modelsOpen && (
-            <div className="mt-2 space-y-4 rounded-[4px] border border-white/5 bg-ink-900/40 p-3">
+            <div className="mt-2 space-y-4 rounded-xl border border-white/5 bg-ink-900/40 p-3">
               {modelGroups.map((grp) => (
                 <div key={grp.group}>
                   <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-600">
@@ -300,7 +300,7 @@ export function SetupScreen() {
                           setModelsOpen(false)
                         }}
                         title={c.description}
-                        className="group flex flex-col gap-1 rounded-[4px] border border-white/5 bg-ink-850/60 p-3 text-left transition hover:border-blood-600/50 hover:bg-blood-950/15"
+                        className="group flex flex-col gap-1 rounded-xl border border-white/5 bg-ink-850/60 p-3 text-left transition hover:border-blood-600/50 hover:bg-blood-950/15"
                       >
                         <span className="flex items-center gap-1.5 text-sm font-bold text-zinc-100">
                           <span>{c.emoji}</span>
@@ -328,7 +328,7 @@ export function SetupScreen() {
                 key={f}
                 onClick={() => setFormat(f)}
                 className={cx(
-                  'flex flex-col items-start gap-2 rounded-[4px] border p-4 text-left transition',
+                  'flex flex-col items-start gap-2 rounded-xl border p-4 text-left transition',
                   active
                     ? 'border-blood-600/60 bg-blood-950/25 shadow-glow-sm'
                     : 'border-white/5 bg-ink-850/60 hover:border-white/15'
@@ -409,7 +409,7 @@ export function SetupScreen() {
               <div className="mb-3">
                 <button
                   onClick={() => setPresetsOpen((o) => !o)}
-                  className="flex w-full items-center gap-2 rounded-[4px] border border-white/5 bg-ink-850/60 px-3 py-2 text-left transition hover:border-blood-600/40"
+                  className="flex w-full items-center gap-2 rounded-xl border border-white/5 bg-ink-850/60 px-3 py-2 text-left transition hover:border-blood-600/40"
                 >
                   <Layers size={13} className="text-blood-400" />
                   <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
@@ -426,7 +426,7 @@ export function SetupScreen() {
                   />
                 </button>
                 {presetsOpen && (
-                  <div className="mt-2 space-y-3 rounded-[4px] border border-white/5 bg-ink-900/40 p-3">
+                  <div className="mt-2 space-y-3 rounded-xl border border-white/5 bg-ink-900/40 p-3">
                     {presetGroups.map((grp) => (
                       <div key={grp.group}>
                         <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-600">
@@ -471,7 +471,7 @@ export function SetupScreen() {
                     key={t.id}
                     onClick={() => toggle(t.id)}
                     className={cx(
-                      'flex items-center gap-2.5 rounded-[4px] border px-3 py-2 text-left transition',
+                      'flex items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition',
                       sel ? 'border-blood-600/50 bg-blood-950/20' : 'border-white/5 bg-ink-850/60 hover:border-white/15'
                     )}
                   >
@@ -504,7 +504,7 @@ export function SetupScreen() {
             <div className="panel space-y-4 p-4">
               <p className="text-sm font-bold text-white">Configurações</p>
 
-              <div className="rounded-[4px] border border-blood-800/30 bg-blood-950/15 p-3">
+              <div className="rounded-xl border border-blood-800/30 bg-blood-950/15 p-3">
                 <p className="mb-0.5 text-sm font-semibold text-zinc-100">Imprevisibilidade</p>
                 <p className="mb-2 text-xs text-zinc-500">{CHAOS_LEVELS[chaosIdx].hint}</p>
                 <div className="flex flex-wrap gap-1.5">
@@ -513,7 +513,7 @@ export function SetupScreen() {
                       key={lvl.label}
                       onClick={() => setChaosIdx(i)}
                       className={cx(
-                        'h-8 flex-1 rounded-[4px] border px-2 text-xs font-bold transition',
+                        'h-8 flex-1 rounded-xl border px-2 text-xs font-bold transition',
                         chaosIdx === i
                           ? 'border-blood-600/60 bg-blood-950/40 text-blood-200'
                           : 'border-white/5 bg-ink-800 text-zinc-400 hover:border-white/15 hover:text-zinc-200'
@@ -621,7 +621,7 @@ export function SetupScreen() {
                       key={n}
                       onClick={() => setMcRuns(n)}
                       className={cx(
-                        'h-8 min-w-[2.75rem] rounded-[4px] border px-2 text-xs font-bold transition',
+                        'h-8 min-w-[2.75rem] rounded-xl border px-2 text-xs font-bold transition',
                         mcRuns === n
                           ? 'border-blood-600/60 bg-blood-950/25 text-blood-300'
                           : 'border-white/5 bg-ink-800 text-zinc-400 hover:border-white/15 hover:text-zinc-200'
@@ -641,7 +641,7 @@ export function SetupScreen() {
             </div>
 
             {errors.length > 0 && (
-              <div className="rounded-[4px] border border-amber-700/30 bg-amber-950/20 p-3">
+              <div className="rounded-xl border border-amber-700/30 bg-amber-950/20 p-3">
                 <ul className="space-y-1 text-xs text-amber-300/90">
                   {errors.map((e, i) => (
                     <li key={i}>• {e}</li>

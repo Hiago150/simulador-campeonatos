@@ -229,7 +229,7 @@ function SeasonList({ onNew, onResume }: { onNew: () => void; onResume: (s: Seas
                             className={cx(
                               'tag',
                               s.status === 'completed'
-                                ? 'border-emerald-700/40 text-emerald-400'
+                                ? 'border-win-700/40 text-win-400'
                                 : 'border-blood-700/40 text-blood-300'
                             )}
                           >
@@ -509,7 +509,7 @@ function SeasonWizard({ onBack, onDone }: { onBack: () => void; onDone: (s: Seas
             <div>
               <button
                 onClick={() => setPresetsOpen((o) => !o)}
-                className="flex w-full items-center gap-2 rounded-[4px] border border-white/5 bg-ink-850/60 px-3 py-2.5 text-left transition hover:border-blood-600/40"
+                className="flex w-full items-center gap-2 rounded-xl border border-white/5 bg-ink-850/60 px-3 py-2.5 text-left transition hover:border-blood-600/40"
               >
                 <Wand2 size={14} className="text-blood-400" />
                 <span className="text-xs font-semibold uppercase tracking-wide text-zinc-300">
@@ -522,7 +522,7 @@ function SeasonWizard({ onBack, onDone }: { onBack: () => void; onDone: (s: Seas
                 />
               </button>
               {presetsOpen && (
-                <div className="mt-2 space-y-4 rounded-[4px] border border-white/5 bg-ink-900/40 p-3">
+                <div className="mt-2 space-y-4 rounded-xl border border-white/5 bg-ink-900/40 p-3">
                   {seasonPresetGroups.map((grp) => (
                     <div key={grp.group}>
                       <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-600">
@@ -534,7 +534,7 @@ function SeasonWizard({ onBack, onDone }: { onBack: () => void; onDone: (s: Seas
                             key={p.id}
                             onClick={() => applyPreset(p)}
                             title={p.description}
-                            className="group flex flex-col gap-1 rounded-[4px] border border-white/5 bg-ink-850/60 p-3 text-left transition hover:border-blood-600/50 hover:bg-blood-950/15"
+                            className="group flex flex-col gap-1 rounded-xl border border-white/5 bg-ink-850/60 p-3 text-left transition hover:border-blood-600/50 hover:bg-blood-950/15"
                           >
                             <span className="flex items-center gap-1.5 text-sm font-bold text-zinc-100">
                               <span>{p.emoji}</span>
@@ -551,7 +551,7 @@ function SeasonWizard({ onBack, onDone }: { onBack: () => void; onDone: (s: Seas
             </div>
 
             {presetApplied && (
-              <div className="rounded-[4px] border border-blood-800/30 bg-blood-950/15 px-3 py-2 text-[11px] text-zinc-400">
+              <div className="rounded-xl border border-blood-800/30 bg-blood-950/15 px-3 py-2 text-[11px] text-zinc-400">
                 Preset aplicado: cada campeonato já tem seu elenco. Você pode revisar tudo nos próximos passos.
               </div>
             )}
@@ -608,7 +608,7 @@ function SeasonWizard({ onBack, onDone }: { onBack: () => void; onDone: (s: Seas
                     key={p}
                     onClick={() => setPeriod(p)}
                     className={cx(
-                      'h-9 w-16 rounded-[4px] border text-sm font-bold transition',
+                      'h-9 w-16 rounded-xl border text-sm font-bold transition',
                       period === p
                         ? 'border-blood-600/60 bg-blood-950/25 text-blood-300'
                         : 'border-white/5 bg-ink-800 text-zinc-400 hover:border-white/15 hover:text-zinc-200'
@@ -683,7 +683,7 @@ function SeasonWizard({ onBack, onDone }: { onBack: () => void; onDone: (s: Seas
               <div>
                 <button
                   onClick={() => setCollectionsOpen((o) => !o)}
-                  className="flex w-full items-center gap-2 rounded-[4px] border border-white/5 bg-ink-850/60 px-3 py-2 text-left transition hover:border-blood-600/40"
+                  className="flex w-full items-center gap-2 rounded-xl border border-white/5 bg-ink-850/60 px-3 py-2 text-left transition hover:border-blood-600/40"
                 >
                   <Layers size={13} className="text-blood-400" />
                   <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
@@ -700,7 +700,7 @@ function SeasonWizard({ onBack, onDone }: { onBack: () => void; onDone: (s: Seas
                   />
                 </button>
                 {collectionsOpen && (
-                  <div className="mt-2 space-y-3 rounded-[4px] border border-white/5 bg-ink-900/40 p-3">
+                  <div className="mt-2 space-y-3 rounded-xl border border-white/5 bg-ink-900/40 p-3">
                     {collectionGroups.map((grp) => (
                       <div key={grp.group}>
                         <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-600">
@@ -745,7 +745,7 @@ function SeasonWizard({ onBack, onDone }: { onBack: () => void; onDone: (s: Seas
                     key={t.id}
                     onClick={() => toggleTeam(t.id)}
                     className={cx(
-                      'flex items-center gap-2 rounded-[4px] border p-2 text-left transition',
+                      'flex items-center gap-2 rounded-xl border p-2 text-left transition',
                       sel
                         ? 'border-blood-600/50 bg-blood-950/25'
                         : 'border-white/5 bg-ink-800/60 hover:border-white/15'
@@ -780,7 +780,7 @@ function SeasonWizard({ onBack, onDone }: { onBack: () => void; onDone: (s: Seas
             {slots.length < 10 && (
               <button
                 onClick={addSlot}
-                className="flex items-center justify-center gap-2 rounded-[4px] border border-dashed border-white/10 py-4 text-sm text-zinc-500 transition hover:border-white/20 hover:text-zinc-300"
+                className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-white/10 py-4 text-sm text-zinc-500 transition hover:border-white/20 hover:text-zinc-300"
               >
                 <Plus size={16} /> Adicionar campeonato
               </button>
@@ -811,7 +811,7 @@ function SeasonWizard({ onBack, onDone }: { onBack: () => void; onDone: (s: Seas
                 const fmt = FORMAT_META[s.format]
                 const Icon = fmt.icon
                 return (
-                  <div key={s.id} className="flex items-center gap-3 rounded-[4px] bg-ink-800/60 px-3 py-2.5">
+                  <div key={s.id} className="flex items-center gap-3 rounded-xl bg-ink-800/60 px-3 py-2.5">
                     <span className="tnum w-5 text-right text-xs font-bold text-zinc-500">{i + 1}</span>
                     <Icon size={14} className="text-blood-400 shrink-0" />
                     <span className="flex-1 text-sm font-medium text-zinc-200">{s.name}</span>
@@ -924,7 +924,7 @@ function SlotEditor({
                     key={f}
                     onClick={() => onChange({ format: f, config: { ...slot.config } })}
                     className={cx(
-                      'flex flex-col gap-1 rounded-[4px] border p-2.5 text-left transition',
+                      'flex flex-col gap-1 rounded-xl border p-2.5 text-left transition',
                       active ? 'border-blood-600/60 bg-blood-950/20' : 'border-white/5 bg-ink-800/60 hover:border-white/15'
                     )}
                   >
@@ -1111,7 +1111,7 @@ function SeasonHub({
                 <div
                   key={slot.id}
                   className={cx(
-                    'flex items-center gap-3 rounded-[4px] px-3 py-2 transition',
+                    'flex items-center gap-3 rounded-xl px-3 py-2 transition',
                     current ? 'bg-blood-950/30 border border-blood-600/30' : done ? 'bg-ink-800/60' : 'bg-ink-800/30'
                   )}
                 >
@@ -1171,7 +1171,7 @@ function SeasonHub({
                 key={tab}
                 onClick={() => setStatsTab(tab)}
                 className={cx(
-                  'rounded-[4px] px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition',
+                  'rounded-xl px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition',
                   statsTab === tab ? 'bg-blood-950/50 text-blood-300' : 'text-zinc-500 hover:text-zinc-200'
                 )}
               >
@@ -1364,7 +1364,7 @@ function SeasonYearSummary({
             <span className="tag">{sport.emoji} {sport.label}</span>
             {game && <span className="tag">{game.emoji} {game.short}</span>}
             {isCompleted ? (
-              <span className="tag border-emerald-700/40 text-emerald-400">Encerrada — {s.period} anos</span>
+              <span className="tag border-win-700/40 text-win-400">Encerrada — {s.period} anos</span>
             ) : (
               <span className="tag border-blood-700/40 text-blood-300">
                 {yearNum}/{s.period} anos
@@ -1386,7 +1386,7 @@ function SeasonYearSummary({
               {(yearEntry?.champions ?? []).map((c) => {
                 const team = poolMap[c.teamId]
                 return (
-                  <div key={c.slotId} className="flex items-center gap-3 rounded-[4px] bg-ink-800/60 px-3 py-3">
+                  <div key={c.slotId} className="flex items-center gap-3 rounded-xl bg-ink-800/60 px-3 py-3">
                     {team && <TeamBadge team={team} size="sm" />}
                     <div>
                       <p className="text-sm font-bold text-zinc-100">{c.teamName}</p>
@@ -1485,7 +1485,7 @@ function SeasonYearSummary({
                 const b = poolMap[h.bId]
                 const total = h.aWins + h.bWins + h.draws
                 return (
-                  <div key={h.key} className="rounded-[4px] bg-ink-800/60 px-3 py-2.5">
+                  <div key={h.key} className="rounded-xl bg-ink-800/60 px-3 py-2.5">
                     <div className="flex items-center gap-2">
                       {a && <TeamBadge team={a} size="sm" />}
                       <span className="flex-1 min-w-0 text-xs font-semibold text-zinc-200 truncate">{a?.name ?? h.aId}</span>
@@ -1510,7 +1510,7 @@ function SeasonYearSummary({
           </button>
           {isCompleted ? (
             <div className="flex flex-col items-end gap-1">
-              <span className="tag border-emerald-700/40 text-emerald-400 text-xs">Temporada encerrada!</span>
+              <span className="tag border-win-700/40 text-win-400 text-xs">Temporada encerrada!</span>
               <p className="text-[11px] text-zinc-600">
                 {s.period} anos de {s.name} — parabéns!
               </p>
@@ -1581,7 +1581,7 @@ function SeasonFinale({ onLeave, onHall }: { onLeave: () => void; onHall: () => 
           <div className="mt-3 flex flex-wrap justify-center gap-2">
             <span className="tag">{sport.emoji} {sport.label}</span>
             {game && <span className="tag">{game.emoji} {game.short}</span>}
-            <span className="tag border-emerald-700/40 text-emerald-400">{s.period} anos concluídos</span>
+            <span className="tag border-win-700/40 text-win-400">{s.period} anos concluídos</span>
             <span className="tag">{totalTitles} títulos disputados</span>
           </div>
         </div>
@@ -1957,7 +1957,7 @@ function SeasonFormScreen({ onBack }: { onBack: () => void }) {
   const Bar = ({ f }: { f: number }) => (
     <div className="h-1.5 w-16 overflow-hidden rounded-full bg-ink-800">
       <div
-        className={cx('h-full rounded-full', f > 0 ? 'bg-emerald-500' : 'bg-blood-500')}
+        className={cx('h-full rounded-full', f > 0 ? 'bg-win-500' : 'bg-blood-500')}
         style={{ width: `${(Math.abs(f) / maxAbs) * 100}%` }}
       />
     </div>
@@ -1978,7 +1978,7 @@ function SeasonFormScreen({ onBack }: { onBack: () => void }) {
       <p
         className={cx(
           'mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide',
-          tone === 'up' ? 'text-emerald-400' : 'text-blood-300'
+          tone === 'up' ? 'text-win-400' : 'text-blood-300'
         )}
       >
         {icon} {title}
@@ -1996,7 +1996,7 @@ function SeasonFormScreen({ onBack }: { onBack: () => void }) {
               <span
                 className={cx(
                   'tnum w-8 text-right text-sm font-bold',
-                  tone === 'up' ? 'text-emerald-400' : 'text-blood-300'
+                  tone === 'up' ? 'text-win-400' : 'text-blood-300'
                 )}
               >
                 {f > 0 ? '+' : ''}
@@ -2108,7 +2108,7 @@ function SeasonYearDetail({ year, onBack }: { year: number; onBack: () => void }
               ) : (
                 <div className="space-y-2.5">
                   {entry.champions.map((c) => (
-                    <div key={c.slotId} className="flex items-center gap-3 rounded-[4px] bg-ink-800/50 px-3 py-2.5">
+                    <div key={c.slotId} className="flex items-center gap-3 rounded-xl bg-ink-800/50 px-3 py-2.5">
                       <Trophy size={14} className="shrink-0 text-amber-400" />
                       <TeamBadge team={poolMap[c.teamId]} size="sm" />
                       <span className="flex-1 truncate text-sm font-bold text-zinc-100">{c.teamName}</span>

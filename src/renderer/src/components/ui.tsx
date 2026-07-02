@@ -87,13 +87,13 @@ export function Segmented<T extends string | number>({
   options: { value: T; label: ReactNode }[]
 }) {
   return (
-    <div className="no-drag inline-flex rounded-[4px] border border-white/5 bg-ink-900 p-1">
+    <div className="no-drag inline-flex rounded-xl border border-white/5 bg-ink-900 p-1">
       {options.map((o) => (
         <button
           key={String(o.value)}
           onClick={() => onChange(o.value)}
           className={cx(
-            'rounded-[3px] px-3.5 py-1.5 text-sm font-semibold transition',
+            'rounded-xl px-3.5 py-1.5 text-sm font-semibold transition',
             value === o.value
               ? 'bg-blood-grad text-white shadow-glow-sm'
               : 'text-zinc-400 hover:text-zinc-100'
@@ -121,7 +121,7 @@ export function Stepper({
 }) {
   const clamp = (v: number) => Math.max(min, Math.min(max, v))
   return (
-    <div className="no-drag inline-flex items-center rounded-[4px] border border-white/10 bg-ink-900">
+    <div className="no-drag inline-flex items-center rounded-xl border border-white/10 bg-ink-900">
       <button
         className="flex h-10 w-10 items-center justify-center text-zinc-400 hover:text-white disabled:opacity-30"
         onClick={() => onChange(clamp(value - step))}

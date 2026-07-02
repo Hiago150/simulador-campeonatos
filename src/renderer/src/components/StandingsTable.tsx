@@ -92,7 +92,7 @@ export function StandingsTable({
                     idle
                       ? 'text-zinc-700'
                       : r.goalDiff > 0
-                        ? 'text-emerald-400/80'
+                        ? 'text-win-400/80'
                         : r.goalDiff < 0
                           ? 'text-blood-400/80'
                           : 'text-zinc-500'

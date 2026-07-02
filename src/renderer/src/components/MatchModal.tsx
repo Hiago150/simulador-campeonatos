@@ -17,7 +17,7 @@ function MomentsFeed({ match, home, away }: { match: Match; home?: Team; away?: 
       <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">Lances</p>
       <div className="space-y-1">
         {moments.map((mo, i) => (
-          <div key={i} className="flex items-start gap-2.5 rounded-[4px] bg-ink-900/50 px-3 py-1.5 text-sm">
+          <div key={i} className="flex items-start gap-2.5 rounded-xl bg-ink-900/50 px-3 py-1.5 text-sm">
             <span className="shrink-0">{mo.icon}</span>
             <span
               className={cx(
@@ -227,7 +227,7 @@ function EsportsBody({ match, home, away }: { match: Match; home?: Team; away?: 
                             <td
                               className={cx(
                                 'tnum text-center font-semibold',
-                                diff > 0 ? 'text-emerald-400' : diff < 0 ? 'text-blood-300' : 'text-zinc-500'
+                                diff > 0 ? 'text-win-400' : diff < 0 ? 'text-blood-300' : 'text-zinc-500'
                               )}
                             >
                               {diff > 0 ? `+${diff}` : diff}
@@ -249,10 +249,10 @@ function EsportsBody({ match, home, away }: { match: Match; home?: Team; away?: 
       </div>
 
       {e.mvp && (
-        <div className="flex items-center gap-3 rounded-xl border border-blood-800/40 bg-blood-950/20 px-4 py-3">
-          <Crosshair size={18} className="text-blood-400" />
+        <div className="flex items-center gap-3 rounded-xl border border-gold-600/30 bg-gold-950/40 px-4 py-3">
+          <Crosshair size={18} className="text-gold-400" />
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-blood-300">MVP da série</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-gold-400">MVP da série</p>
             <p className="text-sm font-bold text-white">
               {e.mvp.name}{' '}
               <span className="tnum ml-1 font-normal text-zinc-400">

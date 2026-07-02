@@ -24,7 +24,7 @@ export function TopBar() {
         <span className="hidden text-[10px] uppercase tracking-[0.26em] text-zinc-600 lg:inline">— Almanaque</span>
       </button>
 
-      <nav className="flex min-w-0 flex-1 items-center overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <nav className="hidden min-w-0 flex-1 items-center overflow-x-auto [scrollbar-width:none] sm:flex [&::-webkit-scrollbar]:hidden">
         {NAV.map((n) => {
           const Icon = n.icon
           const active = screen === n.screen

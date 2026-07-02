@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useApp } from './store/app'
 import { TopBar } from './components/TopBar'
+import { BottomNav } from './components/BottomNav'
 import { Toast } from './components/Toast'
 import { CustomCursor, EASE, Grain } from './components/motionx'
 import { HomeScreen } from './screens/Home'
@@ -46,6 +47,7 @@ export default function App() {
           </motion.div>
         </AnimatePresence>
       </main>
+      <BottomNav />
       <Toast />
     </div>
   )
