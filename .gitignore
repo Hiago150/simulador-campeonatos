@@ -23,3 +23,6 @@ npm-debug.log*
 Thumbs.db
 .vscode/
 .idea/
+
+# Export de campeonato gerado pelo app, commitado por engano (não versionar)
+/Wolrd.json

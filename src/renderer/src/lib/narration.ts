@@ -34,14 +34,21 @@ export function matchMoments(m: Match, teams: Record<string, Team>): Moment[] {
   if (m.football) {
     let h = 0
     let a = 0
-    let lead = 0 // sinal da liderança antes do gol, p/ detectar virada
+    let leader = 0 // quem lidera agora: 1 mandante, -1 visitante, 0 empate
+    let homeTrailed = false
+    let awayTrailed = false
     for (const g of [...m.football.goals].sort((x, y) => x.minute - y.minute)) {
       const homeGoal = g.teamId === m.homeId
       if (homeGoal) h++
       else a++
-      const newLead = Math.sign(h - a)
-      const virada = newLead !== 0 && lead !== 0 && newLead !== lead
-      lead = newLead
+      if (h < a) homeTrailed = true
+      if (a < h) awayTrailed = true
+      const newLeader = Math.sign(h - a)
+      // virada: o gol coloca na frente um time que já esteve atrás no placar
+      const virada =
+        (newLeader === 1 && leader !== 1 && homeTrailed) ||
+        (newLeader === -1 && leader !== -1 && awayTrailed)
+      leader = newLeader
       out.push({
         minute: g.minute,
         icon: g.ownGoal ? '🔴' : '⚽',

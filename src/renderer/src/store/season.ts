@@ -367,6 +367,6 @@ export const useSeasons = create<SeasonStore>()(
         set({ seasons: updated, activeSeason: active?.id === id ? { ...active, name } : active })
       }
     }),
-    { name: 'simcamp-seasons' }
+    { name: 'simcamp-seasons', version: 1, migrate: (persisted) => persisted as SeasonStore }
   )
 )

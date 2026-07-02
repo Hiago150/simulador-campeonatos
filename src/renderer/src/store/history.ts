@@ -164,6 +164,6 @@ export const useHistory = create<HistoryState>()(
 
       reset: () => set({ data: emptyHistory(), committedIds: [], setups: [] })
     }),
-    { name: 'simcamp-history' }
+    { name: 'simcamp-history', version: 1, migrate: (persisted) => persisted as HistoryState }
   )
 )

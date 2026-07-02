@@ -352,6 +352,9 @@ export const useApp = create<AppState>()(
     }),
     {
       name: 'simcamp-app',
+      version: 1,
+      // baseline de versionamento — migrações futuras de schema entram aqui
+      migrate: (persisted) => persisted as AppState,
       partialize: (s) => ({
         customTeams: s.customTeams,
         current: s.current,

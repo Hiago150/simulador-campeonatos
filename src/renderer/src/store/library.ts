@@ -38,6 +38,6 @@ export const useLibrary = create<LibraryState>()(
 
       clear: () => set({ saved: [] })
     }),
-    { name: 'simcamp-library' }
+    { name: 'simcamp-library', version: 1, migrate: (persisted) => persisted as LibraryState }
   )
 )
