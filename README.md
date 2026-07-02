@@ -17,7 +17,7 @@ App desktop (Electron + React + TypeScript) para criar e simular campeonatos de 
 - **Narrativa** — feed de lances na partida, manchetes e jogo/zebra da rodada e resumo narrado do torneio.
 - **Estatísticas** — evolução de pontos, corrida do ranking animada e confrontos diretos.
 - **Histórico acumulado**, **biblioteca local** e **salvar / carregar** em arquivo JSON.
-- Interface em **português (PT-BR)**, visual **"Almanaque"** (osso quente + acento vermelho, serifa Fraunces).
+- Interface em **português (PT-BR)**, visual **"Placar"** — dark vermelho + preto estilo app de resultados, com verde de vitória, dourado de título e **tab bar no celular**; instalável como **PWA** na versão web.
 
 ## Como rodar (desenvolvimento)
 
