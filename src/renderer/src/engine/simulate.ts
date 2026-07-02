@@ -204,12 +204,40 @@ function distribute(total: number, weights: number[]): number[] {
   return out
 }
 
+// peso por papel no time: estrela mata mais, âncora/suporte menos
+const ROLE_KILL_W = [1.28, 1.12, 1, 0.9, 0.75]
+
+/**
+ * "Forma do dia" de cada jogador na SÉRIE (persiste entre os mapas): a maioria
+ * fica perto de 1, mas há dias inspirados (~1.65, o cara carrega) e dias de
+ * pesadelo (~0.45, some do jogo) — é o que abre os saldos +/− pra valer.
+ */
+function rollSeriesForm(team: Team): Map<string, number> {
+  const out = new Map<string, number>()
+  for (const p of (team.squad ?? []).slice(0, 5)) {
+    let form = 0.6 + (Math.random() + Math.random()) * 0.4 // triangular ~1.0
+    const r = Math.random()
+    if (r < 0.12) form += 0.25 // dia inspirado
+    else if (r > 0.88) form -= 0.2 // dia pra esquecer
+    out.set(p.id, clamp(form, 0.45, 1.65))
+  }
+  return out
+}
+
 /**
  * KDA de UM mapa, coerente com o placar: ~7–8 mortes por round disputado,
  * kills de um time = mortes do outro, e o vencedor abate um pouco mais
- * (vantagem achatada pelo fator zebra).
+ * (vantagem achatada pelo fator zebra). A forma do dia espalha os destaques:
+ * quem está voando mata mais e morre menos; quem está apagado, o contrário.
  */
-function mapKda(home: Team, away: Team, mp: EsportsMap, chaos: number): EsportsPlayerLine[] {
+function mapKda(
+  home: Team,
+  away: Team,
+  mp: EsportsMap,
+  chaos: number,
+  homeForm: Map<string, number>,
+  awayForm: Map<string, number>
+): EsportsPlayerLine[] {
   const rounds = mp.home + mp.away
   const totalDeaths = Math.round(rounds * (6.9 + Math.random() * 1.2))
   const margin = (mp.home - mp.away) / Math.max(1, rounds)
@@ -221,13 +249,21 @@ function mapKda(home: Team, away: Team, mp: EsportsMap, chaos: number): EsportsP
   const homeKills = Math.round(totalDeaths * homeShare)
   const awayKills = totalDeaths - homeKills
 
-  const lineFor = (team: Team, kills: number, deaths: number): EsportsPlayerLine[] => {
+  const lineFor = (
+    team: Team,
+    kills: number,
+    deaths: number,
+    form: Map<string, number>
+  ): EsportsPlayerLine[] => {
     const squad = (team.squad ?? []).slice(0, 5)
-    // estrela (idx 0) mata mais; âncora/suporte (idx 4) mata menos — com ruído por mapa
     const killW = squad.map(
-      (_, idx) => (idx === 0 ? 1.22 : idx === 1 ? 1.1 : idx === 4 ? 0.82 : 1) * (0.85 + Math.random() * 0.3)
+      (p, idx) => ROLE_KILL_W[idx] * (form.get(p.id) ?? 1) * (0.8 + Math.random() * 0.4)
     )
-    const deathW = squad.map(() => 0.9 + Math.random() * 0.2)
+    // mortes variam menos que abates (todo mundo morre ~1x por round no máx.),
+    // mas quem está em dia bom morre um pouco menos — é isso que cria o +/−
+    const deathW = squad.map(
+      (p) => clamp(1.18 - 0.18 * (form.get(p.id) ?? 1), 0.85, 1.18) * (0.92 + Math.random() * 0.16)
+    )
     const ks = distribute(kills, killW)
     const ds = distribute(deaths, deathW)
     return squad.map((p, i) => ({
@@ -239,7 +275,10 @@ function mapKda(home: Team, away: Team, mp: EsportsMap, chaos: number): EsportsP
       assists: Math.round(ks[i] * (0.3 + Math.random() * 0.35))
     }))
   }
-  return [...lineFor(home, homeKills, awayKills), ...lineFor(away, awayKills, homeKills)]
+  return [
+    ...lineFor(home, homeKills, awayKills, homeForm),
+    ...lineFor(away, awayKills, homeKills, awayForm)
+  ]
 }
 
 function simulateEsports(home: Team, away: Team, ctx: SimContext): Partial<Match> {
@@ -254,6 +293,9 @@ function simulateEsports(home: Team, away: Team, ctx: SimContext): Partial<Match
   let hMaps = 0
   let aMaps = 0
   const pool = [...(MAP_POOLS[ctx.game ?? 'cs2'] ?? MAP_POOLS.cs2)].sort(() => Math.random() - 0.5)
+  // forma do dia por jogador — sorteada uma vez e mantida na série inteira
+  const homeForm = rollSeriesForm(home)
+  const awayForm = rollSeriesForm(away)
   let mi = 0
   while (hMaps < needed && aMaps < needed) {
     const homeWins = Math.random() < pHomeMap
@@ -268,7 +310,7 @@ function simulateEsports(home: Team, away: Team, ctx: SimContext): Partial<Match
       home: homeWins ? 13 : loserRounds,
       away: homeWins ? loserRounds : 13
     }
-    mp.lines = mapKda(home, away, mp, ctx.chaos)
+    mp.lines = mapKda(home, away, mp, ctx.chaos, homeForm, awayForm)
     maps.push(mp)
     if (homeWins) hMaps++
     else aMaps++

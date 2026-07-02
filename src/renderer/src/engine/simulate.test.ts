@@ -72,11 +72,24 @@ describe('e-sports — KDA coerente com a realidade', () => {
       for (const mp of m.esports!.maps) {
         for (const l of mp.lines!) {
           expect(l.kills).toBeGreaterThanOrEqual(0)
-          expect(l.kills).toBeLessThanOrEqual(45) // teto folgado p/ mapa único
+          expect(l.kills).toBeLessThanOrEqual(52) // teto folgado p/ dia inspirado em mapa longo
           expect(l.deaths).toBeGreaterThanOrEqual(0)
           expect(l.assists).toBeGreaterThanOrEqual(0)
         }
       }
     }
+  })
+
+  it('saldos variados: tem jogador que carrega (+) e jogador que afunda (−)', () => {
+    // num torneio inteiro, a "forma do dia" deve produzir destaques reais
+    const diffs: number[] = []
+    for (const m of playedSeries(5)) {
+      for (const l of m.esports!.lines) diffs.push(l.kills - l.deaths)
+    }
+    expect(Math.max(...diffs)).toBeGreaterThanOrEqual(8)
+    expect(Math.min(...diffs)).toBeLessThanOrEqual(-8)
+    // e não pode ser tudo comprimido perto de zero
+    const spread = Math.max(...diffs) - Math.min(...diffs)
+    expect(spread).toBeGreaterThanOrEqual(20)
   })
 })
