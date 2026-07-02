@@ -59,6 +59,8 @@ export interface EsportsMap {
   name: string
   home: number // rounds vencidos
   away: number
+  /** KDA dos 10 jogadores neste mapa (partidas antigas não têm) */
+  lines?: EsportsPlayerLine[]
 }
 
 export interface EsportsPlayerLine {

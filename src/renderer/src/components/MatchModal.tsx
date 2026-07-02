@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { Match, Sport, Team } from '../types'
 import { Modal } from './ui'
 import { TeamBadge } from './TeamBadge'
@@ -110,12 +111,17 @@ export function MatchModal({
           </div>
 
           <div className="max-h-[55vh] space-y-5 overflow-y-auto px-6 py-5">
-            <MomentsFeed match={match} home={home} away={away} />
-            {sport === 'football' && match.football && (
-              <FootballBody match={match} home={home} away={away} />
-            )}
-            {sport === 'esports' && match.esports && (
-              <EsportsBody match={match} home={home} away={away} />
+            {sport === 'esports' && match.esports ? (
+              // e-sports: KDA (soma da série) é a primeira coisa; lances depois
+              <>
+                <EsportsBody key={match.id} match={match} home={home} away={away} />
+                <MomentsFeed match={match} home={home} away={away} />
+              </>
+            ) : (
+              <>
+                <MomentsFeed match={match} home={home} away={away} />
+                {match.football && <FootballBody match={match} home={home} away={away} />}
+              </>
             )}
           </div>
         </div>
@@ -143,8 +149,120 @@ function FootballBody({ match }: { match: Match; home?: Team; away?: Team }) {
 
 function EsportsBody({ match, home, away }: { match: Match; home?: Team; away?: Team }) {
   const e = match.esports!
+  // 'series' = soma de todos os mapas (visão padrão); número = índice do mapa
+  const [view, setView] = useState<'series' | number>('series')
+  const hasMapLines = e.maps.some((m) => m.lines && m.lines.length > 0)
+  const mapView = typeof view === 'number' ? e.maps[view] : undefined
+  const lines = mapView?.lines ?? e.lines
+
   return (
     <div className="space-y-5">
+      {/* Estatísticas dos jogadores — total da série primeiro; cada mapa via chips */}
+      <div>
+        <div className="mb-2 flex flex-wrap items-center gap-1.5">
+          <p className="mr-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">Jogadores</p>
+          <button
+            onClick={() => setView('series')}
+            className={cx(
+              'rounded-full border px-2.5 py-0.5 text-[11px] font-semibold transition',
+              view === 'series'
+                ? 'border-blood-600 bg-blood-950/40 text-blood-200'
+                : 'border-white/10 text-zinc-400 hover:text-zinc-100'
+            )}
+          >
+            Série (total)
+          </button>
+          {hasMapLines &&
+            e.maps.map((m, i) => (
+              <button
+                key={i}
+                onClick={() => setView(i)}
+                className={cx(
+                  'tnum rounded-full border px-2.5 py-0.5 text-[11px] font-semibold transition',
+                  view === i
+                    ? 'border-blood-600 bg-blood-950/40 text-blood-200'
+                    : 'border-white/10 text-zinc-400 hover:text-zinc-100'
+                )}
+              >
+                {m.name} {m.home}–{m.away}
+              </button>
+            ))}
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { team: home, teamId: match.homeId },
+            { team: away, teamId: match.awayId }
+          ].map((col, idx) => {
+            const teamLines = lines.filter((l) => l.teamId === col.teamId)
+            const kills = teamLines.reduce((s, l) => s + l.kills, 0)
+            return (
+              <div key={idx} className="rounded-xl border border-white/5 bg-ink-900/60 p-3">
+                <div className="mb-2 flex items-center gap-2">
+                  <TeamBadge team={col.team} size="sm" />
+                  <span className="truncate text-xs font-semibold text-zinc-300">{col.team?.name}</span>
+                  <span className="tnum ml-auto shrink-0 text-[11px] text-zinc-500">{kills} abates</span>
+                </div>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-zinc-600">
+                      <th className="text-left font-medium">Jogador</th>
+                      <th className="tnum font-medium">K</th>
+                      <th className="tnum font-medium">D</th>
+                      <th className="tnum font-medium">A</th>
+                      <th className="tnum font-medium" title="Saldo de abates (K − D)">+/−</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {teamLines
+                      .slice()
+                      .sort((a, b) => b.kills - a.kills)
+                      .map((l) => {
+                        const diff = l.kills - l.deaths
+                        return (
+                          <tr key={l.playerId} className="text-zinc-300">
+                            <td className="truncate py-0.5 pr-1">{l.name}</td>
+                            <td className="tnum text-center font-semibold text-white">{l.kills}</td>
+                            <td className="tnum text-center text-zinc-500">{l.deaths}</td>
+                            <td className="tnum text-center text-zinc-500">{l.assists}</td>
+                            <td
+                              className={cx(
+                                'tnum text-center font-semibold',
+                                diff > 0 ? 'text-emerald-400' : diff < 0 ? 'text-blood-300' : 'text-zinc-500'
+                              )}
+                            >
+                              {diff > 0 ? `+${diff}` : diff}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            )
+          })}
+        </div>
+        <p className="mt-1.5 text-[11px] text-zinc-600">
+          {mapView
+            ? `KDA apenas do mapa ${(view as number) + 1} · ${mapView.name} (${mapView.home}–${mapView.away}).`
+            : 'Soma de todos os mapas da série.'}
+        </p>
+      </div>
+
+      {e.mvp && (
+        <div className="flex items-center gap-3 rounded-xl border border-blood-800/40 bg-blood-950/20 px-4 py-3">
+          <Crosshair size={18} className="text-blood-400" />
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-blood-300">MVP da série</p>
+            <p className="text-sm font-bold text-white">
+              {e.mvp.name}{' '}
+              <span className="tnum ml-1 font-normal text-zinc-400">
+                {e.mvp.kills}/{e.mvp.deaths}/{e.mvp.assists}
+              </span>
+            </p>
+          </div>
+        </div>
+      )}
+
       <div>
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
           Mapas · Melhor de {e.bestOf}
@@ -167,70 +285,6 @@ function EsportsBody({ match, home, away }: { match: Match; home?: Team; away?: 
             )
           })}
         </div>
-      </div>
-
-      {e.mvp && (
-        <div className="flex items-center gap-3 rounded-xl border border-blood-800/40 bg-blood-950/20 px-4 py-3">
-          <Crosshair size={18} className="text-blood-400" />
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-blood-300">MVP da série</p>
-            <p className="text-sm font-bold text-white">
-              {e.mvp.name}{' '}
-              <span className="tnum ml-1 font-normal text-zinc-400">
-                {e.mvp.kills}/{e.mvp.deaths}/{e.mvp.assists}
-              </span>
-            </p>
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-3">
-        {[
-          { team: home, lines: e.lines.filter((l) => l.teamId === match.homeId) },
-          { team: away, lines: e.lines.filter((l) => l.teamId === match.awayId) }
-        ].map((col, idx) => (
-          <div key={idx} className="rounded-xl border border-white/5 bg-ink-900/60 p-3">
-            <div className="mb-2 flex items-center gap-2">
-              <TeamBadge team={col.team} size="sm" />
-              <span className="truncate text-xs font-semibold text-zinc-300">{col.team?.name}</span>
-            </div>
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-zinc-600">
-                  <th className="text-left font-medium">Jogador</th>
-                  <th className="tnum font-medium">K</th>
-                  <th className="tnum font-medium">D</th>
-                  <th className="tnum font-medium">A</th>
-                  <th className="tnum font-medium" title="Saldo de abates (K − D)">+/−</th>
-                </tr>
-              </thead>
-              <tbody>
-                {col.lines
-                  .slice()
-                  .sort((a, b) => b.kills - a.kills)
-                  .map((l) => {
-                    const diff = l.kills - l.deaths
-                    return (
-                      <tr key={l.playerId} className="text-zinc-300">
-                        <td className="truncate py-0.5 pr-1">{l.name}</td>
-                        <td className="tnum text-center font-semibold text-white">{l.kills}</td>
-                        <td className="tnum text-center text-zinc-500">{l.deaths}</td>
-                        <td className="tnum text-center text-zinc-500">{l.assists}</td>
-                        <td
-                          className={cx(
-                            'tnum text-center font-semibold',
-                            diff > 0 ? 'text-emerald-400' : diff < 0 ? 'text-blood-300' : 'text-zinc-500'
-                          )}
-                        >
-                          {diff > 0 ? `+${diff}` : diff}
-                        </td>
-                      </tr>
-                    )
-                  })}
-              </tbody>
-            </table>
-          </div>
-        ))}
       </div>
     </div>
   )

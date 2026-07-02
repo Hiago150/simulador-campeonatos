@@ -191,22 +191,55 @@ const MAP_POOLS: Record<EsportsGame, string[]> = {
   valorant: ['Ascent', 'Bind', 'Haven', 'Split', 'Lotus', 'Sunset', 'Icebox', 'Breeze', 'Abyss']
 }
 
-function kdaForTeam(
-  team: Team,
-  roundsWonShare: number,
-  mapsPlayed: number,
-  chaos: number
-): EsportsPlayerLine[] {
-  const squad = team.squad ?? []
-  return squad.map((p, idx) => {
-    const roleBoost = idx === 0 ? 1.18 : idx === 1 ? 1.08 : idx === 4 ? 0.85 : 1
-    const winBoost = blend(0.78 + roundsWonShare * 0.5, 1, chaos)
-    const deathFactor = blend(1.3 - roundsWonShare * 0.5, 1, chaos)
-    const kills = Math.max(0, Math.round((randInt(12, 24) * mapsPlayed * roleBoost * winBoost) / 1.6))
-    const deaths = Math.max(1, Math.round((randInt(12, 22) * mapsPlayed * deathFactor) / 1.6))
-    const assists = Math.round((randInt(2, 8) * mapsPlayed) / 1.6)
-    return { playerId: p.id, name: p.name, teamId: team.id, kills, deaths, assists }
-  })
+/** reparte `total` entre pesos preservando a soma exata (maiores restos ganham +1) */
+function distribute(total: number, weights: number[]): number[] {
+  const sumW = weights.reduce((s, w) => s + w, 0) || 1
+  const raw = weights.map((w) => (total * w) / sumW)
+  const out = raw.map(Math.floor)
+  let rest = total - out.reduce((s, v) => s + v, 0)
+  const order = raw
+    .map((v, i) => ({ i, frac: v - Math.floor(v) }))
+    .sort((a, b) => b.frac - a.frac)
+  for (let k = 0; k < order.length && rest > 0; k++, rest--) out[order[k].i]++
+  return out
+}
+
+/**
+ * KDA de UM mapa, coerente com o placar: ~7–8 mortes por round disputado,
+ * kills de um time = mortes do outro, e o vencedor abate um pouco mais
+ * (vantagem achatada pelo fator zebra).
+ */
+function mapKda(home: Team, away: Team, mp: EsportsMap, chaos: number): EsportsPlayerLine[] {
+  const rounds = mp.home + mp.away
+  const totalDeaths = Math.round(rounds * (6.9 + Math.random() * 1.2))
+  const margin = (mp.home - mp.away) / Math.max(1, rounds)
+  const homeShare = clamp(
+    blend(0.5 + margin * 0.18, 0.5, chaos) + (Math.random() - 0.5) * 0.04,
+    0.38,
+    0.62
+  )
+  const homeKills = Math.round(totalDeaths * homeShare)
+  const awayKills = totalDeaths - homeKills
+
+  const lineFor = (team: Team, kills: number, deaths: number): EsportsPlayerLine[] => {
+    const squad = (team.squad ?? []).slice(0, 5)
+    // estrela (idx 0) mata mais; âncora/suporte (idx 4) mata menos — com ruído por mapa
+    const killW = squad.map(
+      (_, idx) => (idx === 0 ? 1.22 : idx === 1 ? 1.1 : idx === 4 ? 0.82 : 1) * (0.85 + Math.random() * 0.3)
+    )
+    const deathW = squad.map(() => 0.9 + Math.random() * 0.2)
+    const ks = distribute(kills, killW)
+    const ds = distribute(deaths, deathW)
+    return squad.map((p, i) => ({
+      playerId: p.id,
+      name: p.name,
+      teamId: team.id,
+      kills: ks[i],
+      deaths: ds[i],
+      assists: Math.round(ks[i] * (0.3 + Math.random() * 0.35))
+    }))
+  }
+  return [...lineFor(home, homeKills, awayKills), ...lineFor(away, awayKills, homeKills)]
 }
 
 function simulateEsports(home: Team, away: Team, ctx: SimContext): Partial<Match> {
@@ -230,24 +263,33 @@ function simulateEsports(home: Team, away: Team, ctx: SimContext): Partial<Match
     const loserStr = homeWins ? sA : sH
     const gap = blend(winnerStr - loserStr, 0, ctx.chaos)
     const loserRounds = clamp(Math.round(11 - gap * 0.26 + randInt(-3, 2)), 1, 11)
-    maps.push({
+    const mp: EsportsMap = {
       name: pool[mi % pool.length],
       home: homeWins ? 13 : loserRounds,
       away: homeWins ? loserRounds : 13
-    })
+    }
+    mp.lines = mapKda(home, away, mp, ctx.chaos)
+    maps.push(mp)
     if (homeWins) hMaps++
     else aMaps++
     mi++
   }
 
-  const totalRoundsHome = maps.reduce((s, m) => s + m.home, 0)
-  const totalRoundsAway = maps.reduce((s, m) => s + m.away, 0)
-  const allRounds = Math.max(1, totalRoundsHome + totalRoundsAway)
-  const mapsPlayed = maps.length
-
-  const homeLines = kdaForTeam(home, totalRoundsHome / allRounds, mapsPlayed, ctx.chaos)
-  const awayLines = kdaForTeam(away, totalRoundsAway / allRounds, mapsPlayed, ctx.chaos)
-  const lines = [...homeLines, ...awayLines]
+  // KDA da série = soma dos mapas (o que garante números coerentes com os rounds)
+  const byPlayer = new Map<string, EsportsPlayerLine>()
+  for (const mp of maps) {
+    for (const l of mp.lines ?? []) {
+      const cur = byPlayer.get(l.playerId)
+      if (cur) {
+        cur.kills += l.kills
+        cur.deaths += l.deaths
+        cur.assists += l.assists
+      } else {
+        byPlayer.set(l.playerId, { ...l })
+      }
+    }
+  }
+  const lines = [...byPlayer.values()]
 
   const rating = (l: EsportsPlayerLine) => l.kills + l.assists * 0.4 - l.deaths * 0.3
   const mvp = lines.reduce((best, l) => (rating(l) > rating(best) ? l : best), lines[0])
@@ -258,8 +300,8 @@ function simulateEsports(home: Team, away: Team, ctx: SimContext): Partial<Match
     mvp,
     lines,
     totalKills: [
-      homeLines.reduce((s, l) => s + l.kills, 0),
-      awayLines.reduce((s, l) => s + l.kills, 0)
+      lines.filter((l) => l.teamId === home.id).reduce((s, l) => s + l.kills, 0),
+      lines.filter((l) => l.teamId === away.id).reduce((s, l) => s + l.kills, 0)
     ]
   }
 
