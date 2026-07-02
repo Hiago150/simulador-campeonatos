@@ -47,7 +47,7 @@ export function HistoryScreen() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-6xl px-8 py-8">
+      <div className="mx-auto max-w-6xl px-4 py-8 md:px-8">
         <ScreenHeader kicker="Todas as edições" title="Hall da" accent="fama">
           {!empty && (
             <Button variant="danger" icon={<Trash2 size={15} />} onClick={() => setConfirmClear(true)}>

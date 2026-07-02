@@ -218,7 +218,7 @@ export function SetupScreen() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-6xl px-8 py-8">
+      <div className="mx-auto max-w-6xl px-4 py-8 md:px-8">
         <button onClick={() => go('home')} className="mb-6 flex items-center gap-2 text-sm text-zinc-500 transition-colors hover:text-zinc-200">
           <ArrowLeft size={16} /> Voltar
         </button>
@@ -653,7 +653,7 @@ export function SetupScreen() {
         </div>
 
         {/* Barra de ação fixa — resumo + Iniciar sempre visíveis ao rolar */}
-        <div className="sticky bottom-0 z-20 -mx-8 mt-6 border-t border-paper/10 bg-ink-950/90 px-8 py-3 backdrop-blur">
+        <div className="sticky bottom-0 z-20 -mx-4 mt-6 border-t border-paper/10 bg-ink-950/90 px-4 py-3 backdrop-blur md:-mx-8 md:px-8">
           <div className="flex items-center justify-between gap-4">
             <p className="hidden min-w-0 flex-1 truncate text-sm text-zinc-400 sm:block">
               {errors.length > 0 ? <span className="text-amber-300">{errors[0]}</span> : structureSummary}

@@ -147,7 +147,7 @@ function SeasonList({ onNew, onResume }: { onNew: () => void; onResume: (s: Seas
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-3xl px-8 py-8">
+      <div className="mx-auto max-w-3xl px-4 py-8 md:px-8">
         <div className="mb-7 flex items-end justify-between">
           <div>
             <p className="kicker mb-3">
@@ -463,7 +463,7 @@ function SeasonWizard({ onBack, onDone }: { onBack: () => void; onDone: (s: Seas
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-3xl px-8 py-8">
+      <div className="mx-auto max-w-3xl px-4 py-8 md:px-8">
         <button onClick={handleBack} className="mb-6 flex items-center gap-2 text-sm text-zinc-500 transition-colors hover:text-zinc-200">
           <ArrowLeft size={16} /> Voltar
         </button>
@@ -1068,7 +1068,7 @@ function SeasonHub({
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-3xl px-8 py-8">
+      <div className="mx-auto max-w-3xl px-4 py-8 md:px-8">
         {/* Header */}
         <div className="mb-6">
           <div className="mb-1 flex items-center justify-between">
@@ -1342,7 +1342,7 @@ function SeasonYearSummary({
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-3xl px-8 py-8">
+      <div className="mx-auto max-w-3xl px-4 py-8 md:px-8">
         {/* Header */}
         <div className="mb-7">
           <div className="mb-2 flex items-center justify-between">
@@ -1569,7 +1569,7 @@ function SeasonFinale({ onLeave, onHall }: { onLeave: () => void; onHall: () => 
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-3xl px-8 py-8">
+      <div className="mx-auto max-w-3xl px-4 py-8 md:px-8">
         {/* Header */}
         <div className="mb-8 text-center">
           <p className="kicker mb-3 justify-center">
@@ -1760,7 +1760,7 @@ function SeasonHallOfFame({ onBack, onYear }: { onBack: () => void; onYear: (yea
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-3xl px-8 py-8">
+      <div className="mx-auto max-w-3xl px-4 py-8 md:px-8">
         <button onClick={onBack} className="mb-6 flex items-center gap-2 text-sm text-zinc-500 transition-colors hover:text-zinc-200">
           <ArrowLeft size={16} /> Voltar
         </button>
@@ -2011,7 +2011,7 @@ function SeasonFormScreen({ onBack }: { onBack: () => void }) {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-3xl px-8 py-8">
+      <div className="mx-auto max-w-3xl px-4 py-8 md:px-8">
         <button onClick={onBack} className="mb-6 flex items-center gap-2 text-sm text-zinc-500 transition-colors hover:text-zinc-200">
           <ArrowLeft size={16} /> Voltar
         </button>
@@ -2074,7 +2074,7 @@ function SeasonYearDetail({ year, onBack }: { year: number; onBack: () => void }
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-3xl px-8 py-8">
+      <div className="mx-auto max-w-3xl px-4 py-8 md:px-8">
         <button onClick={onBack} className="mb-6 flex items-center gap-2 text-sm text-zinc-500 transition-colors hover:text-zinc-200">
           <ArrowLeft size={16} /> Voltar ao Hall da Fama
         </button>

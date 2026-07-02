@@ -30,7 +30,7 @@ export function LibraryScreen() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-6xl px-8 py-8">
+      <div className="mx-auto max-w-6xl px-4 py-8 md:px-8">
         <ScreenHeader kicker="Sua estante" title="Campeonatos" accent="salvos" />
 
         <ConfirmDialog

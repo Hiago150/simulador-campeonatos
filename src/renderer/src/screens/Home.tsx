@@ -47,7 +47,7 @@ export function HomeScreen() {
 
   return (
     <div className="relative h-full overflow-y-auto bg-ink-950">
-      <div className="mx-auto max-w-6xl px-8 py-14 md:px-12 md:py-20">
+      <div className="mx-auto max-w-6xl px-5 py-14 md:px-12 md:py-20">
         {/* ---------------- HERO ---------------- */}
         <section className="border-b border-paper/10 pb-14">
           <Reveal>

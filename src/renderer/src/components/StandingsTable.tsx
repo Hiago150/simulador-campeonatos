@@ -20,7 +20,7 @@ export function StandingsTable({
 }) {
   const isEsports = sport === 'esports'
   return (
-    <div className="overflow-hidden">
+    <div className="overflow-x-auto">
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr className="text-[11px] uppercase tracking-wide text-zinc-500">
@@ -33,8 +33,8 @@ export function StandingsTable({
             <th className="tnum w-8 py-2 text-center font-medium">D</th>
             {!compact && (
               <>
-                <th className="tnum w-9 py-2 text-center font-medium">{isEsports ? 'MV' : 'GP'}</th>
-                <th className="tnum w-9 py-2 text-center font-medium">{isEsports ? 'MS' : 'GC'}</th>
+                <th className="tnum hidden w-9 py-2 text-center font-medium sm:table-cell">{isEsports ? 'MV' : 'GP'}</th>
+                <th className="tnum hidden w-9 py-2 text-center font-medium sm:table-cell">{isEsports ? 'MS' : 'GC'}</th>
               </>
             )}
             <th className="tnum w-9 py-2 text-center font-medium">SG</th>
@@ -73,8 +73,8 @@ export function StandingsTable({
                 <td className="tnum py-2 text-center text-zinc-400">{r.lost}</td>
                 {!compact && (
                   <>
-                    <td className="tnum py-2 text-center text-zinc-400">{r.goalsFor}</td>
-                    <td className="tnum py-2 text-center text-zinc-400">{r.goalsAgainst}</td>
+                    <td className="tnum hidden py-2 text-center text-zinc-400 sm:table-cell">{r.goalsFor}</td>
+                    <td className="tnum hidden py-2 text-center text-zinc-400 sm:table-cell">{r.goalsAgainst}</td>
                   </>
                 )}
                 <td

@@ -149,7 +149,7 @@ export function TournamentScreen() {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="border-b border-white/5 bg-ink-950/60 px-6 py-4">
+      <div className="border-b border-white/5 bg-ink-950/60 px-4 py-4 md:px-6">
         <div className="mb-3 flex items-start justify-between gap-4">
           <div className="flex items-start gap-3">
             <button
@@ -296,7 +296,7 @@ export function TournamentScreen() {
       )}
 
       {/* Conteúdo */}
-      <div className="flex-1 overflow-y-auto px-6 py-6">
+      <div className="flex-1 overflow-y-auto px-4 py-5 md:px-6 md:py-6">
         {mcActive && (
           <div className="mb-5 inline-flex rounded-xl border border-white/5 bg-ink-900 p-1">
             {(['play', 'mc'] as const).map((v) => (

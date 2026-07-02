@@ -80,7 +80,7 @@ function StatsBody({ t, go }: { t: Tournament; go: (s: 'tournament') => void }) 
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-6xl px-8 py-8">
+      <div className="mx-auto max-w-6xl px-4 py-8 md:px-8">
         <div className="mb-7 flex flex-wrap items-end justify-between gap-3">
           <Reveal>
             <p className="kicker mb-3">
@@ -474,7 +474,7 @@ function HeadToHeadTab({
   return (
     <div className="space-y-5">
       <div className="card p-5">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <TeamSelect label="Time A" value={aId} onChange={setAId} teams={t.teams} />
           <TeamSelect label="Time B" value={bId} onChange={setBId} teams={t.teams} />
         </div>
