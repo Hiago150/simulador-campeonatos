@@ -25,7 +25,9 @@ jobs:
           node-version: 22
           cache: npm
 
-      - run: npm ci
+      # npm install (não ci): o npm no Windows grava entradas "extraneous"
+      # no lockfile (esbuild nested do vitest) e o npm ci recusa em Linux
+      - run: npm install --no-audit --no-fund
 
       - run: npx vite build --config vite.web.config.ts
 
