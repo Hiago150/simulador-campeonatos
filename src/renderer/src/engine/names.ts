@@ -64,7 +64,17 @@ export function generateSquad(team: Team, game?: EsportsGame, rosterOverrides?: 
     const override = rosterOverrides?.[rosterKey(game, team.id)]
     const real = override && override.length >= 5 ? override : getEsportsRoster(game, team.id)
     if (real) {
-      return real.slice(0, 5).map((name, i) => ({ id: `${team.id}_p${i}`, name, position: roles[i] }))
+      const names = real.slice(0, 5)
+      // time em transição (4 anunciados): completa com um tag procedural estável
+      if (names.length < 5) {
+        const fillRng = mulberry32(hashString(team.id + (game ?? '') + 'fill'))
+        const fr = <T,>(arr: T[]): T => arr[Math.floor(fillRng() * arr.length)]
+        while (names.length < 5) {
+          const tag = `${fr(GAMER_PREFIX)}${fr(GAMER_CORE)}${Math.floor(fillRng() * 90 + 10)}`
+          if (!names.includes(tag)) names.push(tag)
+        }
+      }
+      return names.map((name, i) => ({ id: `${team.id}_p${i}`, name, position: roles[i] }))
     }
   }
 
