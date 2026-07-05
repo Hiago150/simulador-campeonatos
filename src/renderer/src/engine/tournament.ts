@@ -19,7 +19,12 @@ import {
   nextPowerOf2,
   standardSeedOrder
 } from './bracket'
+import { advanceElim, buildElim, elimLives, readyElimMatches } from './elim'
 import { computeStandings } from './standings'
+
+function isElim(f: Format): boolean {
+  return f === 'double-elim' || f === 'triple-elim'
+}
 
 export interface CreateInput {
   name: string
@@ -84,6 +89,19 @@ export function createTournament(input: CreateInput): Tournament {
     const { bracket, matches } = buildBracket(seeded, twoLeggedOf(input.config, input.sport))
     // avança uma vez para resolver byes de imediato
     const adv = advanceBracket(bracket, matches)
+    return {
+      ...base,
+      cupSeed: seeded,
+      bracket: adv.bracket,
+      matches: adv.matches,
+      phase: 'knockout'
+    }
+  }
+
+  if (isElim(input.format)) {
+    const seeded = seedForCup(teams, randomSeed(input.config))
+    const built = buildElim(seeded, elimLives(input.format))
+    const adv = advanceElim(built.bracket, built.matches)
     return {
       ...base,
       cupSeed: seeded,
@@ -316,6 +334,14 @@ function advanceKnockout(t: Tournament): Tournament {
   return nt
 }
 
+function advanceElimPhase(t: Tournament): Tournament {
+  if (!t.bracket) return t
+  const { bracket, matches, champion } = advanceElim(t.bracket, t.matches)
+  let nt: Tournament = { ...t, bracket, matches }
+  if (champion) nt = { ...nt, champion, phase: 'finished' }
+  return nt
+}
+
 function allGroupMatchesPlayed(t: Tournament): boolean {
   const gm = t.matches.filter((m) => m.groupId)
   return gm.length > 0 && gm.every((m) => m.played)
@@ -481,6 +507,9 @@ function runAdvance(t: Tournament): Tournament {
       return advanceSwiss(t)
     case 'league-playoffs':
       return advanceLeaguePlayoffs(t)
+    case 'double-elim':
+    case 'triple-elim':
+      return advanceElimPhase(t)
     default:
       return t
   }
@@ -515,6 +544,11 @@ export function currentRoundInfo(t: Tournament): RoundInfo {
     const maxRound = Math.max(...t.matches.filter((m) => m.groupId).map((m) => m.round))
     const ids = unplayed.filter((m) => m.round === minRound).map((m) => m.id)
     return { label: `Rodada ${minRound} de ${maxRound} · Grupos`, matchIds: ids }
+  }
+
+  if (isElim(t.format) && t.bracket) {
+    const ids = readyElimMatches(t)
+    return { label: ids.length > 0 ? 'Confrontos em aberto' : 'Mata-mata', matchIds: ids }
   }
 
   if (t.phase === 'knockout' && t.bracket) {
@@ -630,6 +664,18 @@ export function resetResults(t: Tournament): Tournament {
   if (t.format === 'cup' && t.cupSeed) {
     const { bracket, matches } = buildBracket(t.cupSeed, twoLeggedOf(t.config, t.sport))
     const adv = advanceBracket(bracket, matches)
+    return {
+      ...t,
+      bracket: adv.bracket,
+      matches: adv.matches,
+      champion: undefined,
+      phase: 'knockout',
+      updatedAt: now
+    }
+  }
+  if (isElim(t.format) && t.cupSeed) {
+    const built = buildElim(t.cupSeed, elimLives(t.format))
+    const adv = advanceElim(built.bracket, built.matches)
     return {
       ...t,
       bracket: adv.bracket,

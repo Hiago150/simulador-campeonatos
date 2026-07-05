@@ -1,4 +1,4 @@
-import { GitFork, LayoutGrid, ListOrdered, Medal, Shuffle, type LucideIcon } from 'lucide-react'
+import { GitFork, LayoutGrid, ListOrdered, Medal, Shuffle, Skull, Swords, type LucideIcon } from 'lucide-react'
 import type { EsportsGame, Format, Sport } from '../types'
 
 export const FORMAT_META: Record<
@@ -34,6 +34,18 @@ export const FORMAT_META: Record<
     short: 'Playoffs',
     desc: 'Pontos corridos e, no fim, os melhores decidem o título no mata-mata.',
     icon: Medal
+  },
+  'double-elim': {
+    label: 'Dupla Eliminação',
+    short: 'Dupla elim.',
+    desc: 'Chave superior e inferior: só sai quem perde duas vezes. Grande final com reset.',
+    icon: Swords
+  },
+  'triple-elim': {
+    label: 'Tripla Eliminação',
+    short: 'Tripla elim.',
+    desc: 'Winners, losers e última chance: o time só é eliminado após três derrotas.',
+    icon: Skull
   }
 }
 
@@ -42,7 +54,15 @@ export const SPORT_META: Record<Sport, { label: string; emoji: string; unit: str
   esports: { label: 'E-sports', emoji: '🎮', unit: 'mapas' }
 }
 
-export const FORMATS: Format[] = ['league', 'cup', 'groups', 'swiss', 'league-playoffs']
+export const FORMATS: Format[] = [
+  'league',
+  'cup',
+  'groups',
+  'swiss',
+  'league-playoffs',
+  'double-elim',
+  'triple-elim'
+]
 
 export const GAME_META: Record<EsportsGame, { label: string; short: string; emoji: string }> = {
   cs2: { label: 'Counter-Strike 2', short: 'CS2', emoji: '🔫' },

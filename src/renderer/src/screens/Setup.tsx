@@ -714,6 +714,10 @@ function validate(
       if (cfg.qualifiers >= perGroup) errs.push('Classificados por grupo deve ser menor que o tamanho do grupo.')
     }
   }
+  if (format === 'double-elim' || format === 'triple-elim') {
+    if (n < 4) errs.push('A eliminação múltipla precisa de ao menos 4 times.')
+    else if ((n & (n - 1)) !== 0) errs.push('Use uma potência de 2 (8, 16 ou 32 times) — os botões "Top 8/16/32" ajudam.')
+  }
   return errs
 }
 
@@ -756,6 +760,13 @@ function describeStructure(
   }
   if (format === 'swiss') {
     return `${n} times, ${cfg.swissRounds} rodadas pelo sistema suíço. Sem eliminação.${serie}`
+  }
+  if (format === 'double-elim' || format === 'triple-elim') {
+    const triple = format === 'triple-elim'
+    const rule = triple
+      ? 'chave superior, inferior e última chance — só sai quem perde 3 vezes'
+      : 'chave superior e inferior — só sai quem perde 2 vezes'
+    return `${n} times em ${triple ? 'tripla' : 'dupla'} eliminação: ${rule}. Grande final com reset.${serie}`
   }
   return ''
 }

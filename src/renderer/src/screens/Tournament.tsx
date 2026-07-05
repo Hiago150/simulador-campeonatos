@@ -342,6 +342,9 @@ export function TournamentScreen() {
             {t.format === 'cup' && (
               <CupView t={t} teams={teams} currentIds={roundInfo.matchIds} onSim={simMatch} onOpen={setSelectedMatch} />
             )}
+            {(t.format === 'double-elim' || t.format === 'triple-elim') && (
+              <CupView t={t} teams={teams} currentIds={roundInfo.matchIds} onSim={simMatch} onOpen={setSelectedMatch} />
+            )}
             {t.format === 'groups' && (
               <GroupsView t={t} teams={teams} currentIds={roundInfo.matchIds} onSim={simMatch} onOpen={setSelectedMatch} />
             )}
@@ -834,7 +837,7 @@ function CupView({ t, teams, currentIds, onSim, onOpen }: ViewProps) {
       <div className="card p-5">
         <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">Chaveamento</p>
         <FitScale>
-          <Bracket bracket={t.bracket} matches={t.matches} teams={teams} sport={t.sport} onSimulate={onSim} onOpen={onOpen} />
+          <Bracket bracket={t.bracket} matches={t.matches} teams={teams} sport={t.sport} champion={t.champion} onSimulate={onSim} onOpen={onOpen} />
         </FitScale>
       </div>
     </div>

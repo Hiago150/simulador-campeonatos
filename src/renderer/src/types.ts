@@ -3,7 +3,14 @@
 // ============================================================
 
 export type Sport = 'football' | 'esports'
-export type Format = 'league' | 'cup' | 'groups' | 'swiss' | 'league-playoffs'
+export type Format =
+  | 'league'
+  | 'cup'
+  | 'groups'
+  | 'swiss'
+  | 'league-playoffs'
+  | 'double-elim'
+  | 'triple-elim'
 export type TeamCategory = 'club' | 'national' | 'custom'
 export type BestOf = 1 | 3 | 5
 /** jogo do e-sports — define pool de mapas e contexto da série */
@@ -112,6 +119,12 @@ export interface Group {
   teamIds: string[]
 }
 
+/** de onde vem um lado de um confronto (dupla/tripla eliminação) */
+export interface BracketFeed {
+  bm: string // id do BracketMatch de origem
+  take: 'winner' | 'loser'
+}
+
 export interface BracketMatch {
   id: string
   roundIndex: number
@@ -125,6 +138,17 @@ export interface BracketMatch {
   /** ida e volta: [idaId, voltaId]; vencedor pelo agregado */
   legIds?: string[]
   winnerId: string | null
+  // --- dupla/tripla eliminação ---
+  loserId?: string | null
+  /** origem explícita de cada lado (winners/losers/última chance) */
+  homeFrom?: BracketFeed
+  awayFrom?: BracketFeed
+  /** confronto de reset da grande final — só ocorre se o desafiante vencer o `resetOf` */
+  resetOf?: string
+  /** resolvido sem partida (bye/vazio) */
+  bye?: boolean
+  /** seção do chaveamento (winners/losers/última chance/grande final) */
+  section?: 'wb' | 'lb' | 'lcb' | 'gf'
 }
 
 export interface BracketRound {
@@ -133,6 +157,8 @@ export interface BracketRound {
   matches: BracketMatch[]
   /** rodada disputada em ida e volta (agregado) */
   twoLegged?: boolean
+  /** seção do chaveamento (dupla/tripla eliminação) */
+  section?: 'wb' | 'lb' | 'lcb' | 'gf'
 }
 
 export interface SwissState {

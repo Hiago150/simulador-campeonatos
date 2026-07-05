@@ -10,6 +10,8 @@ interface Props {
   sport: Sport
   onSimulate: (matchId: string) => void
   onOpen: (match: Match) => void
+  /** campeão já conhecido (dupla/tripla eliminação: a última rodada pode ficar sem vencedor) */
+  champion?: string
 }
 
 function Row({
@@ -130,8 +132,8 @@ function BracketCard({ bm, matches, teams, onSimulate, onOpen }: Omit<Props, 'br
   )
 }
 
-export function Bracket({ bracket, matches, teams, sport, onSimulate, onOpen }: Props) {
-  const champion = bracket[bracket.length - 1]?.matches[0]?.winnerId
+export function Bracket({ bracket, matches, teams, sport, onSimulate, onOpen, champion: championProp }: Props) {
+  const champion = championProp ?? bracket[bracket.length - 1]?.matches[0]?.winnerId
   const champTeam = champion ? teams[champion] : undefined
 
   return (
