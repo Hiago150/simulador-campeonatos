@@ -38,6 +38,13 @@ export const ESPORTS_ROSTERS: Record<EsportsGame, Record<string, string[]>> = {
     heretics: ['Boo', 'koshmaras', 'Wo0t', 'RieNs', 'benjyfishy'],
     edg: ['nobody', 'ZmjjKK', 'CHICHOO', 'Smoggy', 'Jieni7'],
     leviatan: ['kiNgg', 'spike', 'blowz', 'Neon', 'Sato'],
+    navi: ['chloric', 'ExiT', 'Ruxic', 'hiro', 'CyvOph'],
+    vitality: ['Jamppi', 'PROFEK', 'Derke', 'Chronicle', 'Sayonara'],
+    eg: ['supamen', 'bao', 'dgzin', 'Paincakes', 'zerona'],
+    karmine: ['dos9', 'LewN', 'Avez', 'SUYGETSU', 'N4RRATE'],
+    m8: ['starxo', 'Proxh', 'bipo', 'marteen', 'Minny'],
+    mibr: ['zekken', 'tex', 'Mazino', 'Verno', 'aspas'],
+    kru: ['saadhak', 'mwzera', 'Less', 'Dantedeu5', 'heat'],
     furia: ['artzin', 'basic', 'Shyy', 'eeiu', 'koalanoob'],
     g2: ['valyn', 'jawgemo', 'BABYBAY', 'trent', 'leaf']
   }
