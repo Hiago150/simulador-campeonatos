@@ -24,6 +24,8 @@ export interface Moment {
   text: string
   minute?: number
   tone: 'goal' | 'card' | 'info' | 'map' | 'play'
+  /** destaque visual: 'ace' (jogada brilhante, verde) | 'decisive' (mudou o jogo, vermelho) */
+  highlight?: 'ace' | 'decisive'
 }
 
 export function matchMoments(m: Match, teams: Record<string, Team>): Moment[] {
@@ -37,6 +39,7 @@ export function matchMoments(m: Match, teams: Record<string, Team>): Moment[] {
     let leader = 0 // quem lidera agora: 1 mandante, -1 visitante, 0 empate
     let homeTrailed = false
     let awayTrailed = false
+    const goalMoments: { moment: Moment; scorerIsHome: boolean; nthOfScorer: number }[] = []
     for (const g of [...m.football.goals].sort((x, y) => x.minute - y.minute)) {
       const homeGoal = g.teamId === m.homeId
       if (homeGoal) h++
@@ -49,14 +52,26 @@ export function matchMoments(m: Match, teams: Record<string, Team>): Moment[] {
         (newLeader === 1 && leader !== 1 && homeTrailed) ||
         (newLeader === -1 && leader !== -1 && awayTrailed)
       leader = newLeader
-      out.push({
+      const moment: Moment = {
         minute: g.minute,
         icon: g.ownGoal ? '🔴' : '⚽',
         tone: 'goal',
+        highlight: virada ? 'decisive' : undefined,
         text: `${g.minute}' ${g.playerName}${g.ownGoal ? ' (contra)' : ''} — ${home} ${h}–${a} ${away}${
           virada ? ' · virada!' : ''
         }`
-      })
+      }
+      goalMoments.push({ moment, scorerIsHome: homeGoal, nthOfScorer: homeGoal ? h : a })
+      out.push(moment)
+    }
+    // gol do título: sem pênaltis, o (perdedor+1)-ésimo gol do vencedor é o que decide
+    if (!m.penalties && h !== a) {
+      const homeWon = h > a
+      const loserGoals = homeWon ? a : h
+      const winning = goalMoments.find(
+        (gm) => gm.scorerIsHome === homeWon && gm.nthOfScorer === loserGoals + 1
+      )
+      if (winning) winning.moment.highlight = 'decisive'
     }
     const [hr, ar] = m.football.red
     if (hr > 0) out.push({ icon: '🟥', tone: 'card', text: `${home} terminou com ${11 - hr} em campo` })
@@ -76,10 +91,14 @@ export function matchMoments(m: Match, teams: Record<string, Team>): Moment[] {
       const winnerName = mp.home > mp.away ? home : away
       const min = Math.min(mp.home, mp.away)
       const flavor = min <= 4 ? ' · atropelo' : min >= 11 ? ' · no detalhe' : ''
+      const closesSeries = i === e.maps.length - 1 // o último mapa fecha a série
       out.push({
         icon: '🗺️',
         tone: 'map',
-        text: `Mapa ${i + 1} · ${mp.name}: ${mp.home}–${mp.away} (${winnerName})${flavor}`
+        highlight: closesSeries ? 'decisive' : undefined,
+        text: `Mapa ${i + 1} · ${mp.name}: ${mp.home}–${mp.away} (${winnerName})${flavor}${
+          closesSeries ? ' · fecha a série' : ''
+        }`
       })
     })
     // lances de sabor (o app não simula round a round — são plausíveis)
@@ -87,10 +106,12 @@ export function matchMoments(m: Match, teams: Record<string, Team>): Moment[] {
     if (top) {
       const topTeam = nameOf(teams, top.teamId)
       out.push({ icon: '🔫', tone: 'play', text: `${top.name} (${topTeam}) explodiu com ${top.kills} abates` })
-      if (top.kills - top.deaths >= 15) out.push({ icon: '💥', tone: 'play', text: `Ace decisivo de ${top.name}` })
+      if (top.kills - top.deaths >= 15)
+        out.push({ icon: '💥', tone: 'play', highlight: 'ace', text: `Ace decisivo de ${top.name}` })
     }
     const tightMap = e.maps.find((mp) => Math.min(mp.home, mp.away) >= 11)
-    if (tightMap) out.push({ icon: '🎯', tone: 'play', text: `Clutch no ${tightMap.name} decidiu a parada` })
+    if (tightMap)
+      out.push({ icon: '🎯', tone: 'play', highlight: 'ace', text: `Clutch no ${tightMap.name} decidiu a parada` })
     if (e.mvp) {
       out.push({
         icon: '🏅',

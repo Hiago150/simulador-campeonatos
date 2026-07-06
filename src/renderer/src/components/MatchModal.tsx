@@ -1,34 +1,121 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { Match, Sport, Team } from '../types'
 import { Modal } from './ui'
 import { TeamBadge } from './TeamBadge'
 import { cx } from '../lib/cx'
-import { matchMoments } from '../lib/narration'
-import { Crosshair } from 'lucide-react'
+import { matchMoments, type Moment } from '../lib/narration'
+import { Crosshair, Flame, Goal, Info, Map as MapIcon, Square, Star, Zap } from 'lucide-react'
+
+/** ícone do lance: destaques ganham cor de acento (verde = brilho, vermelho = decisivo) */
+function MomentIcon({ mo }: { mo: Moment }) {
+  if (mo.highlight === 'ace')
+    return <Star size={15} className="shrink-0 text-win-400" aria-label="Jogada de destaque" />
+  if (mo.highlight === 'decisive')
+    return <Flame size={15} className="shrink-0 text-blood-400" aria-label="Momento decisivo" />
+  switch (mo.tone) {
+    case 'goal':
+      return <Goal size={15} className="shrink-0 text-zinc-300" />
+    case 'card':
+      return <Square size={13} className="mt-0.5 shrink-0 fill-blood-500 text-blood-500" />
+    case 'map':
+      return <MapIcon size={15} className="shrink-0 text-zinc-400" />
+    case 'play':
+      return <Zap size={15} className="shrink-0 text-zinc-300" />
+    default:
+      return <Info size={15} className="shrink-0 text-zinc-500" />
+  }
+}
+
+type MomentFilter = 'all' | 'ace' | 'decisive'
 
 function MomentsFeed({ match, home, away }: { match: Match; home?: Team; away?: Team }) {
   const teams: Record<string, Team> = {}
   if (home) teams[match.homeId] = home
   if (away) teams[match.awayId] = away
   const moments = matchMoments(match, teams)
+  const [filter, setFilter] = useState<MomentFilter>('all')
   if (moments.length === 0) return null
+
+  const hasAce = moments.some((mo) => mo.highlight === 'ace')
+  const hasDecisive = moments.some((mo) => mo.highlight === 'decisive')
+  const shown = filter === 'all' ? moments : moments.filter((mo) => mo.highlight === filter)
+
+  // chips que filtram E servem de legenda (cor ↔ significado)
+  const chip = (value: MomentFilter, label: ReactNode, activeCls: string) => (
+    <button
+      key={value}
+      onClick={() => setFilter(value)}
+      className={cx(
+        'flex min-h-[28px] items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold transition',
+        filter === value ? activeCls : 'border-white/10 text-zinc-500 hover:text-zinc-200'
+      )}
+    >
+      {label}
+    </button>
+  )
+
   return (
     <div>
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">Lances</p>
-      <div className="space-y-1">
-        {moments.map((mo, i) => (
-          <div key={i} className="flex items-start gap-2.5 rounded-xl bg-ink-900/50 px-3 py-1.5 text-sm">
-            <span className="shrink-0">{mo.icon}</span>
+      <div className="mb-2 flex flex-wrap items-center gap-1.5">
+        <p className="mr-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">Lances</p>
+        {(hasAce || hasDecisive) && chip('all', 'Tudo', 'border-white/30 bg-white/[0.06] text-zinc-100')}
+        {hasAce &&
+          chip(
+            'ace',
+            <>
+              <Star size={11} className="text-win-400" /> Destaques
+            </>,
+            'border-win-700/60 bg-win-950/60 text-win-300'
+          )}
+        {hasDecisive &&
+          chip(
+            'decisive',
+            <>
+              <Flame size={11} className="text-blood-400" /> Decisivos
+            </>,
+            'border-blood-700/60 bg-blood-950/40 text-blood-300'
+          )}
+      </div>
+      <div className="space-y-1.5">
+        {shown.map((mo, i) => (
+          <div
+            key={i}
+            title={
+              mo.highlight === 'ace'
+                ? 'Jogada de destaque'
+                : mo.highlight === 'decisive'
+                  ? 'Momento decisivo'
+                  : undefined
+            }
+            className={cx(
+              'flex items-start gap-2.5 rounded-xl px-3 py-2 text-sm transition hover:bg-white/[0.04]',
+              mo.highlight === 'ace'
+                ? 'border-l-2 border-win-500 bg-win-950/40'
+                : mo.highlight === 'decisive'
+                  ? 'border-l-2 border-blood-500 bg-blood-950/25'
+                  : 'bg-ink-900/50'
+            )}
+          >
+            <span className="mt-0.5 shrink-0">
+              <MomentIcon mo={mo} />
+            </span>
             <span
               className={cx(
                 'leading-snug',
-                mo.tone === 'goal' || mo.tone === 'play' ? 'text-zinc-200' : 'text-zinc-400'
+                mo.highlight
+                  ? 'font-medium text-zinc-100'
+                  : mo.tone === 'goal' || mo.tone === 'play'
+                    ? 'text-zinc-200'
+                    : 'text-zinc-400'
               )}
             >
               {mo.text}
             </span>
           </div>
         ))}
+        {shown.length === 0 && (
+          <p className="px-3 py-2 text-xs text-zinc-600">Nenhum lance nessa categoria.</p>
+        )}
       </div>
     </div>
   )

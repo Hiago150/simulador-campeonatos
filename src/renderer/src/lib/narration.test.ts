@@ -75,6 +75,36 @@ describe('matchMoments — futebol', () => {
     expect(texts[2]).toContain('virada')
   })
 
+  it('marca o gol do título como decisivo (e a virada também)', () => {
+    const teams = { home: team('home', 80), away: team('away', 80) }
+    // 0–1, 1–1, 2–1: o 3º gol é virada E gol do título (vencedor 2, perdedor 1 → 2º gol do vencedor decide)
+    const m = footballMatch({
+      homeScore: 2,
+      awayScore: 1,
+      football: {
+        goals: [goal(10, 'away', 'Zé'), goal(30, 'home', 'Téo'), goal(80, 'home', 'Rui')],
+        possession: [50, 50], shots: [0, 0], shotsOnTarget: [0, 0],
+        corners: [0, 0], fouls: [0, 0], yellow: [0, 0], red: [0, 0]
+      }
+    })
+    const ms = matchMoments(m, teams)
+    expect(ms[2].highlight).toBe('decisive') // gol da virada e do título
+    expect(ms[0].highlight).toBeUndefined()
+    // 3–1 sem virada: o 2º gol do vencedor (perdedor fez 1) é o decisivo
+    const m2 = footballMatch({
+      homeScore: 3,
+      awayScore: 1,
+      football: {
+        goals: [goal(5, 'home', 'A'), goal(20, 'home', 'B'), goal(50, 'away', 'C'), goal(70, 'home', 'D')],
+        possession: [50, 50], shots: [0, 0], shotsOnTarget: [0, 0],
+        corners: [0, 0], fouls: [0, 0], yellow: [0, 0], red: [0, 0]
+      }
+    })
+    const ms2 = matchMoments(m2, teams)
+    expect(ms2[1].highlight).toBe('decisive') // 2º gol do mandante
+    expect(ms2[3].highlight).toBeUndefined()
+  })
+
   it('não marca virada quando o favorito só amplia', () => {
     const teams = { home: team('home', 80), away: team('away', 80) }
     const m = footballMatch({
