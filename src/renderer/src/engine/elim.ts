@@ -2,8 +2,8 @@
 // última chance (só na tripla) e grande final com reset.
 // Modelado como BracketRound[] com referências de origem explícitas (winner/loser),
 // então reaproveita o renderer/plumbing do mata-mata simples.
-import type { BracketMatch, BracketRound, Match } from '../types'
-import { uid } from './rng'
+import type { BracketFeed, BracketMatch, BracketRound, Match } from '../types'
+import { shuffle, uid } from './rng'
 import { nextPowerOf2, roundName } from './bracket'
 
 function mkMatch(homeId: string, awayId: string, roundIndex: number, stage: string): Match {
@@ -35,12 +35,21 @@ export function buildElim(seeded: (string | null)[], lives: 2 | 3): { bracket: B
   const rounds: BracketRound[] = []
   const matches: Match[] = []
   let ri = 0
-  const push = (name: string, section: BracketRound['section'], bms: BracketMatch[]): BracketRound => {
+  const push = (
+    name: string,
+    section: BracketRound['section'],
+    bms: BracketMatch[],
+    entrantFeeds?: BracketFeed[]
+  ): BracketRound => {
     bms.forEach((b, s) => {
       b.roundIndex = ri
       b.slot = s
     })
     const r: BracketRound = { index: ri, name, section, matches: bms }
+    if (entrantFeeds) {
+      r.reseed = true
+      r.entrantFeeds = entrantFeeds
+    }
     rounds.push(r)
     ri++
     return r
@@ -112,46 +121,51 @@ export function buildElim(seeded: (string | null)[], lives: 2 | 3): { bracket: B
   return { bracket: rounds, matches }
 }
 
-/** Chave inferior a partir de uma chave superior (perdedores caem). */
+type PushFn = (
+  name: string,
+  section: BracketRound['section'],
+  bms: BracketMatch[],
+  entrantFeeds?: BracketFeed[]
+) => BracketRound
+
+/**
+ * Chave inferior a partir de uma chave superior (perdedores caem). Cada rodada
+ * é um POOL com ressorteio: quando todos os entrantes ficam definidos, eles são
+ * repareados evitando revanches (ver `advanceElim`) — não há mais posição fixa.
+ */
 function buildLowerFrom(
   upper: BracketRound[],
   section: 'lb' | 'lcb',
   label: string,
-  push: (name: string, section: BracketRound['section'], bms: BracketMatch[]) => BracketRound
+  push: PushFn
 ): { rounds: BracketRound[]; finalBm: BracketMatch } {
   const k = upper.length
   const out: BracketRound[] = []
   let rr = 1
 
-  // R1: pareia os perdedores da 1ª rodada do WB
+  // R1: entram os perdedores da 1ª rodada do WB
   const cnt1 = upper[0].matches.length / 2
   const bms1 = Array.from({ length: cnt1 }, () => node(section))
-  for (let s = 0; s < cnt1; s++) {
-    bms1[s].homeFrom = { bm: upper[0].matches[2 * s].id, take: 'loser' }
-    bms1[s].awayFrom = { bm: upper[0].matches[2 * s + 1].id, take: 'loser' }
-  }
-  out.push(push(`${label} · R${rr++}`, section, bms1))
+  const feeds1: BracketFeed[] = upper[0].matches.map((m) => ({ bm: m.id, take: 'loser' as const }))
+  out.push(push(`${label} · R${rr++}`, section, bms1, feeds1))
   let survivors = bms1
 
   for (let u = 1; u < k; u++) {
-    // major: sobreviventes do LB vs perdedores da rodada u do WB
+    // major: sobreviventes do LB + perdedores da rodada u do WB (repareados)
     const cnt = upper[u].matches.length
     const major = Array.from({ length: cnt }, () => node(section))
-    for (let s = 0; s < cnt; s++) {
-      major[s].homeFrom = { bm: survivors[s].id, take: 'winner' }
-      major[s].awayFrom = { bm: upper[u].matches[s].id, take: 'loser' }
-    }
-    out.push(push(`${label} · R${rr++}`, section, major))
+    const feeds: BracketFeed[] = [
+      ...survivors.map((bm) => ({ bm: bm.id, take: 'winner' as const })),
+      ...upper[u].matches.map((m) => ({ bm: m.id, take: 'loser' as const }))
+    ]
+    out.push(push(`${label} · R${rr++}`, section, major, feeds))
     survivors = major
     if (u < k - 1) {
-      // minor: pareia sobreviventes do LB entre si
+      // minor: sobreviventes do LB entre si (também repareados)
       const cnt2 = survivors.length / 2
       const minor = Array.from({ length: cnt2 }, () => node(section))
-      for (let s = 0; s < cnt2; s++) {
-        minor[s].homeFrom = { bm: survivors[2 * s].id, take: 'winner' }
-        minor[s].awayFrom = { bm: survivors[2 * s + 1].id, take: 'winner' }
-      }
-      out.push(push(`${label} · R${rr++}`, section, minor))
+      const feeds2: BracketFeed[] = survivors.map((bm) => ({ bm: bm.id, take: 'winner' as const }))
+      out.push(push(`${label} · R${rr++}`, section, minor, feeds2))
       survivors = minor
     }
   }
@@ -159,10 +173,7 @@ function buildLowerFrom(
 }
 
 /** "Última chance": gauntlet sobre os perdedores do LB (droppers mais antigos entram primeiro). */
-function buildLastChance(
-  lbRounds: BracketRound[],
-  push: (name: string, section: BracketRound['section'], bms: BracketMatch[]) => BracketRound
-): BracketMatch | undefined {
+function buildLastChance(lbRounds: BracketRound[], push: PushFn): BracketMatch | undefined {
   const drops = lbRounds.flatMap((r) => r.matches.map((m) => ({ bm: m.id, take: 'loser' as const })))
   if (drops.length < 2) return undefined
   let n = 1
@@ -179,6 +190,42 @@ function buildLastChance(
     prev = g
   }
   return prev
+}
+
+/** pareamento perfeito da lista usando só arestas permitidas; null se impossível */
+function perfectMatching(
+  pool: string[],
+  forbidden: (a: string, b: string) => boolean
+): [string, string][] | null {
+  const n = pool.length
+  const used = new Array<boolean>(n).fill(false)
+  const pairs: [string, string][] = []
+  const bt = (): boolean => {
+    const i = used.indexOf(false)
+    if (i < 0) return true
+    used[i] = true
+    for (let j = i + 1; j < n; j++) {
+      if (used[j] || forbidden(pool[i], pool[j])) continue
+      used[j] = true
+      pairs.push([pool[i], pool[j]])
+      if (bt()) return true
+      pairs.pop()
+      used[j] = false
+    }
+    used[i] = false
+    return false
+  }
+  return bt() ? pairs.map((p) => [...p] as [string, string]) : null
+}
+
+/**
+ * Pareia os times evitando revanches; sorteia a ordem para variar (ressorteio).
+ * Fase 1: procura um pareamento TOTALMENTE sem revanche (se existir, usa-o).
+ * Fase 2: só se for combinatoriamente impossível, permite revanches.
+ */
+function pairAvoidRematch(ids: string[], played: (a: string, b: string) => boolean): [string, string][] {
+  const pool = shuffle(ids)
+  return perfectMatching(pool, played) ?? perfectMatching(pool, () => false) ?? []
 }
 
 // ============================================================
@@ -202,6 +249,10 @@ export function advanceElim(
     if (!s || !decided(s)) return { ready: false, id: null }
     return { ready: true, id: feed.take === 'winner' ? s.winnerId : (s.loserId ?? null) }
   }
+  const alreadyPlayed = (a: string, b: string): boolean =>
+    matches.some(
+      (m) => m.played && ((m.homeId === a && m.awayId === b) || (m.homeId === b && m.awayId === a))
+    )
 
   let changed = true
   let guard = 0
@@ -219,6 +270,37 @@ export function advanceElim(
           changed = true
         }
       }
+    }
+    // 1.5) rodadas com ressorteio: quando todos os entrantes estão definidos,
+    //      repareia evitando revanches (é aqui que "sorteia contra quem cai")
+    for (const round of bracket) {
+      if (!round.reseed || !round.entrantFeeds) continue
+      if (round.matches.some((bm) => bm.matchId || bm.bye || bm.winnerId)) continue // já montada
+      const allReady = round.entrantFeeds.every((f) => {
+        const s = byId.get(f.bm)
+        return s != null && decided(s)
+      })
+      if (!allReady) continue
+      const ids = round.entrantFeeds.map((f) => resolve(f).id).filter((id): id is string => id != null)
+      const pool = ids.slice()
+      const byeTeam = pool.length % 2 === 1 ? pool.pop() : undefined
+      const pairs = pairAvoidRematch(pool, alreadyPlayed)
+      round.matches.forEach((bm, i) => {
+        if (i < pairs.length) {
+          bm.homeId = pairs[i][0]
+          bm.awayId = pairs[i][1]
+          const m = mkMatch(pairs[i][0], pairs[i][1], bm.roundIndex, round.name)
+          bm.matchId = m.id
+          matches.push(m)
+        } else if (byeTeam && i === pairs.length) {
+          bm.homeId = byeTeam
+          bm.winnerId = byeTeam
+          bm.bye = true
+        } else {
+          bm.bye = true
+        }
+      })
+      changed = true
     }
     // 2) resolve origens → times, byes e cria as partidas
     for (const bm of byId.values()) {

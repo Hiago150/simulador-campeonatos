@@ -111,6 +111,72 @@ describe('eliminação múltipla — tripla', () => {
   }
 })
 
+describe('eliminação múltipla — ressorteio evita revanches', () => {
+  const key = (a: string, b: string) => [a, b].sort().join('|')
+
+  // Revanches que o ressorteio DEVERIA evitar: quando a rodada tinha ≥2
+  // confrontos (havia com quem trocar). Finais de 1 confronto (LB final) são
+  // 1v1 forçados — revanche ali é inevitável e aceitável.
+  const avoidableRematches = (r: ReturnType<typeof play>): number => {
+    // tamanho da rodada de cada partida + ordem cronológica
+    const roundSize = new Map<string, number>()
+    const isGf = new Map<string, boolean>()
+    for (const rd of r.bracket) {
+      const size = rd.matches.filter((bm) => bm.matchId).length
+      for (const bm of rd.matches) if (bm.matchId) {
+        roundSize.set(bm.matchId, size)
+        isGf.set(bm.matchId, bm.section === 'gf')
+      }
+    }
+    const played = r.matches.filter((m) => m.played) // ordem de criação ≈ cronológica
+    const seen = new Set<string>()
+    let bad = 0
+    for (const m of played) {
+      const k = key(m.homeId, m.awayId)
+      const rematch = seen.has(k) // a dupla já se enfrentou ANTES
+      if (rematch && !isGf.get(m.id) && (roundSize.get(m.id) ?? 1) >= 2) bad++
+      seen.add(k)
+    }
+    return bad
+  }
+
+  it('8 times (dupla): zero revanches evitáveis em 30 sorteios', () => {
+    for (let trial = 0; trial < 30; trial++) {
+      const r = play(seed(8), 2)
+      expect(r.champion).toBeTruthy()
+      expect(avoidableRematches(r), `sorteio ${trial}`).toBe(0)
+    }
+  })
+
+  // Em brackets grandes, o histórico denso pode tornar UMA revanche
+  // combinatoriamente inevitável mesmo com pareamento ótimo — mas é raro.
+  for (const [n, limit] of [
+    [16, 2],
+    [32, 3]
+  ] as const) {
+    it(`${n} times (dupla): revanches evitáveis raras (≤ ${limit}/torneio, 30 sorteios)`, () => {
+      let worst = 0
+      let total = 0
+      for (let trial = 0; trial < 30; trial++) {
+        const bad = avoidableRematches(play(seed(n), 2))
+        worst = Math.max(worst, bad)
+        total += bad
+      }
+      expect(worst).toBeLessThanOrEqual(limit)
+      // na média, quase sempre zero
+      expect(total / 30).toBeLessThan(0.5)
+    })
+  }
+
+  it('tripla 8 times: zero revanches evitáveis', () => {
+    for (let trial = 0; trial < 15; trial++) {
+      const r = play(seed(8), 3)
+      expect(r.champion).toBeTruthy()
+      expect(avoidableRematches(r)).toBe(0)
+    }
+  })
+})
+
 describe('eliminação múltipla — byes (não potência de 2)', () => {
   it('6 times (padded p/ 8) completam sem travar', () => {
     const r = play(seed(6), 2)

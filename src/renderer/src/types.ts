@@ -159,6 +159,10 @@ export interface BracketRound {
   twoLegged?: boolean
   /** seção do chaveamento (dupla/tripla eliminação) */
   section?: 'wb' | 'lb' | 'lcb' | 'gf'
+  /** rodada com ressorteio: os entrantes são repareados evitando revanches */
+  reseed?: boolean
+  /** fontes dos entrantes de uma rodada com ressorteio (winner/loser de outras) */
+  entrantFeeds?: BracketFeed[]
 }
 
 export interface SwissState {
