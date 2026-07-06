@@ -125,6 +125,46 @@ export function matchMoments(m: Match, teams: Record<string, Team>): Moment[] {
   return out
 }
 
+// ──────────── Resumo para compartilhar (e-sports): opções de destaque ────────
+// Frases neutras e factuais, uma por linha, citando jogador + mapa + ação —
+// só a partir de dados que a série realmente tem (sem inventar round/mapa).
+
+export function esportsHighlightOptions(m: Match, teams: Record<string, Team>): string[] {
+  if (!m.esports || !m.played) return []
+  const e = m.esports
+  const home = nameOf(teams, m.homeId)
+  const away = nameOf(teams, m.awayId)
+  const out: string[] = []
+
+  e.maps.forEach((mp, i) => {
+    if (!mp.lines || mp.lines.length === 0) return
+    const top = [...mp.lines].sort((a, b) => b.kills - a.kills)[0]
+    const teamName = top.teamId === m.homeId ? home : away
+    const isAce = top.kills - top.deaths >= 15
+    out.push(
+      isAce
+        ? `No Mapa ${i + 1} (${mp.name}), ${top.name} (${teamName}) fechou com um ace: ${top.kills} abates e ${top.deaths} mortes.`
+        : `No Mapa ${i + 1} (${mp.name}), ${top.name} (${teamName}) liderou os abates: ${top.kills}/${top.deaths}/${top.assists}.`
+    )
+  })
+
+  const last = e.maps[e.maps.length - 1]
+  if (last) {
+    const winner = last.home > last.away ? home : away
+    const [hi, lo] = [Math.max(last.home, last.away), Math.min(last.home, last.away)]
+    out.push(`O Mapa ${e.maps.length} (${last.name}) fechou a série: ${winner} venceu por ${hi}–${lo}.`)
+  }
+
+  if (e.mvp) {
+    const mvpTeam = e.mvp.teamId === m.homeId ? home : away
+    out.push(
+      `${e.mvp.name} (${mvpTeam}) foi o MVP da série, somando ${e.mvp.kills}/${e.mvp.deaths}/${e.mvp.assists} em ${e.maps.length} mapa(s).`
+    )
+  }
+
+  return out
+}
+
 // ─────────────────── Destaques de uma rodada (zebra + jogo) ──────────────────
 
 export interface RoundHighlight {

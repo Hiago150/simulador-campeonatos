@@ -3,8 +3,8 @@ import type { Match, Sport, Team } from '../types'
 import { Modal } from './ui'
 import { TeamBadge } from './TeamBadge'
 import { cx } from '../lib/cx'
-import { matchMoments, type Moment } from '../lib/narration'
-import { Crosshair, Flame, Goal, Info, Map as MapIcon, Square, Star, Zap } from 'lucide-react'
+import { matchMoments, esportsHighlightOptions, type Moment } from '../lib/narration'
+import { Check, Copy, Crosshair, Flame, Goal, Info, Map as MapIcon, Share2, Square, Star, Zap } from 'lucide-react'
 
 /** ícone do lance: destaques ganham cor de acento (verde = brilho, vermelho = decisivo) */
 function MomentIcon({ mo }: { mo: Moment }) {
@@ -121,6 +121,57 @@ function MomentsFeed({ match, home, away }: { match: Match; home?: Team; away?: 
   )
 }
 
+/** bullets neutros (jogador + mapa + ação) prontos pra copiar e compartilhar fora do app */
+function ShareSummary({ match, home, away }: { match: Match; home?: Team; away?: Team }) {
+  const teams: Record<string, Team> = {}
+  if (home) teams[match.homeId] = home
+  if (away) teams[match.awayId] = away
+  const options = esportsHighlightOptions(match, teams)
+  const [open, setOpen] = useState(false)
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null)
+  if (options.length === 0) return null
+
+  const copy = async (text: string, i: number) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedIdx(i)
+      setTimeout(() => setCopiedIdx((cur) => (cur === i ? null : cur)), 1500)
+    } catch {
+      // clipboard indisponível (ex.: contexto sem permissão) — ignora silenciosamente
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-white/5 bg-ink-900/60">
+      <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-2 px-4 py-3 text-left">
+        <Share2 size={15} className="shrink-0 text-zinc-400" />
+        <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+          Resumo para compartilhar
+        </span>
+        <span className="ml-auto text-[11px] text-zinc-600">
+          {open ? 'ocultar' : `${options.length} opções`}
+        </span>
+      </button>
+      {open && (
+        <div className="space-y-1.5 px-4 pb-4">
+          {options.map((text, i) => (
+            <div key={i} className="flex items-start gap-2 rounded-lg bg-ink-950/50 px-3 py-2 text-sm text-zinc-300">
+              <span className="flex-1 leading-snug">{text}</span>
+              <button
+                onClick={() => copy(text, i)}
+                title="Copiar"
+                className="mt-0.5 shrink-0 rounded-md p-1 text-zinc-500 transition hover:bg-white/5 hover:text-zinc-200"
+              >
+                {copiedIdx === i ? <Check size={14} className="text-win-400" /> : <Copy size={14} />}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function StatRow({ label, home, away, suffix = '' }: { label: string; home: number; away: number; suffix?: string }) {
   const total = home + away || 1
   const hp = (home / total) * 100
@@ -203,6 +254,7 @@ export function MatchModal({
               <>
                 <EsportsBody key={match.id} match={match} home={home} away={away} />
                 <MomentsFeed match={match} home={home} away={away} />
+                <ShareSummary match={match} home={home} away={away} />
               </>
             ) : (
               <>

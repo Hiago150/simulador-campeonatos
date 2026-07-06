@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { matchMoments, roundHighlights } from './narration'
+import { matchMoments, roundHighlights, esportsHighlightOptions } from './narration'
+import { createTournament, simulateAll } from '../engine/tournament'
+import { baseConfig, mkTeams } from '../test/fixtures'
 import type { Goal, Match, Team } from '../types'
 
 const team = (id: string, strength: number): Team => ({
@@ -138,5 +140,82 @@ describe('roundHighlights — zebra na perspectiva do vencedor', () => {
     expect(hi?.zebra?.loser).toBe('FAV')
     // 3–2 (gols do vencedor primeiro), não "2–3"
     expect(hi?.zebra?.score).toBe('3–2')
+  })
+})
+
+describe('esportsHighlightOptions — resumo para compartilhar', () => {
+  function playedSeries(bestOf: 1 | 3 | 5) {
+    const t = simulateAll(
+      createTournament({
+        name: 'Highlights',
+        sport: 'esports',
+        format: 'cup',
+        teams: mkTeams(8, 'esports'),
+        config: baseConfig({ bestOf, game: 'cs2' })
+      })
+    )
+    const teams: Record<string, Team> = {}
+    for (const tm of t.teams) teams[tm.id] = tm
+    return { matches: t.matches.filter((m) => m.played && m.esports), teams }
+  }
+
+  it('só gera opções para partidas de e-sports já jogadas', () => {
+    const teams = { home: team('home', 80), away: team('away', 80) }
+    const unplayed: Match = {
+      id: 'x',
+      round: 1,
+      stage: 'R1',
+      homeId: 'home',
+      awayId: 'away',
+      played: false,
+      homeScore: 0,
+      awayScore: 0
+    } as Match
+    expect(esportsHighlightOptions(unplayed, teams)).toEqual([])
+
+    const football = footballMatch({ homeScore: 1, awayScore: 0 })
+    expect(esportsHighlightOptions(football, teams)).toEqual([])
+  })
+
+  it('cada opção cita jogador + mapa/momento + ação, sem inventar rounds, e cabe em 30 palavras', () => {
+    const { matches, teams } = playedSeries(5)
+    for (const m of matches) {
+      const options = esportsHighlightOptions(m, teams)
+      const e = m.esports!
+      expect(options.length).toBeGreaterThan(0)
+      for (const text of options) {
+        const words = text.trim().split(/\s+/).length
+        expect(words).toBeLessThanOrEqual(30)
+        // nunca cita "round" (o motor não rastreia round a round — só mapa)
+        expect(text.toLowerCase()).not.toContain('round ')
+      }
+      // a última opção sempre resume o MVP da série (dado real, não inventado)
+      if (e.mvp) {
+        expect(options[options.length - 1]).toContain(e.mvp.name)
+      }
+    }
+  })
+
+  it('marca ace quando o saldo de abates do topo do mapa é ≥ 15', () => {
+    // várias rodadas de torneios pra não depender de sorte de uma única série
+    let sawAce = false
+    for (let round = 0; round < 8; round++) {
+      const { matches, teams } = playedSeries(5)
+      for (const m of matches) {
+        const options = esportsHighlightOptions(m, teams)
+        m.esports!.maps.forEach((mp, i) => {
+          if (!mp.lines?.length) return
+          const top = [...mp.lines].sort((a, b) => b.kills - a.kills)[0]
+          const isAce = top.kills - top.deaths >= 15
+          const mapOption = options.find((t) => t.startsWith(`No Mapa ${i + 1} `))
+          expect(mapOption).toBeTruthy()
+          if (isAce) {
+            sawAce = true
+            expect(mapOption).toContain('ace')
+          }
+        })
+      }
+    }
+    expect(sawAce).toBe(true) // em ~8 torneios de BO5, algum mapa deve ter ace
   })
 })
