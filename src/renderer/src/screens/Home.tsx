@@ -7,7 +7,10 @@ import { progress } from '../engine/selectors'
 import { CHAMPIONSHIP_PRESETS } from '../data/championships'
 import { championshipInput, randomInput } from '../lib/quickstart'
 import { TeamBadge } from '../components/TeamBadge'
-import { Counter, Magnetic, Marquee, Reveal, RevealLines } from '../components/motionx'
+import BorderGlow from '../components/BorderGlow'
+import Silk from '../components/Silk'
+import BlurText from '../components/BlurText'
+import { Counter, Magnetic, Marquee, Reveal } from '../components/motionx'
 import type { Format } from '../types'
 
 // modelos em destaque para o início rápido (um clique → torneio pronto)
@@ -46,8 +49,17 @@ export function HomeScreen() {
   const finished = current?.phase === 'finished'
 
   return (
-    <div className="relative h-full overflow-y-auto bg-ink-950">
-      <div className="mx-auto max-w-6xl px-5 py-14 md:px-12 md:py-20">
+    <div className="relative isolate h-full bg-ink-950">
+      {/* Fundo "Silk" (React Bits, WebGL) — fica parado atrás do conteúdo, que rola por cima */}
+      <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+        <div className="absolute inset-0 opacity-35">
+          <Silk color="#7f1414" speed={3.5} scale={1.15} noiseIntensity={1.3} rotation={0} />
+        </div>
+        <div className="absolute inset-0 bg-gradient-to-b from-ink-950/30 via-ink-950/55 to-ink-950/85" />
+      </div>
+
+      <div className="h-full overflow-y-auto">
+        <div className="mx-auto max-w-6xl px-5 py-14 md:px-12 md:py-20">
         {/* ---------------- HERO ---------------- */}
         <section className="border-b border-paper/10 pb-14">
           <Reveal>
@@ -61,15 +73,36 @@ export function HomeScreen() {
           </Reveal>
 
           <h1 className="display text-[clamp(2.8rem,9vw,8rem)] leading-[0.9] text-zinc-100">
-            <RevealLines
-              delay={0.12}
-              lines={[
-                <>Crie, simule e</>,
-                <>
-                  conquiste <span className="italic text-blood-500">campeonatos</span>
-                </>
-              ]}
+            <BlurText
+              text="Crie, simule e"
+              animateBy="words"
+              direction="bottom"
+              delay={110}
+              stepDuration={0.4}
+              startOnMount
+              className="flex-wrap"
             />
+            <div className="flex flex-wrap items-baseline gap-x-4">
+              <BlurText
+                text="conquiste"
+                animateBy="words"
+                direction="bottom"
+                delay={110}
+                stepDuration={0.4}
+                startDelayIndex={3}
+                startOnMount
+              />
+              <BlurText
+                text="campeonatos"
+                animateBy="words"
+                direction="bottom"
+                delay={110}
+                stepDuration={0.4}
+                startDelayIndex={4}
+                startOnMount
+                className="italic text-blood-500"
+              />
+            </div>
           </h1>
 
           <Reveal delay={0.5} className="mt-12 flex flex-col gap-10 md:flex-row md:items-end md:justify-between">
@@ -79,16 +112,25 @@ export function HomeScreen() {
               narração de cada rodada — ou conduza um time por temporadas inteiras.
             </p>
             <div className="flex items-center gap-7">
-              <Magnetic strength={0.4}>
+              <BorderGlow
+                backgroundColor="#16161a"
+                glowColor="0 90 66"
+                colors={['#ff6464', '#f83a3a', '#9b1212']}
+                borderRadius={10}
+                glowRadius={26}
+                glowIntensity={1.1}
+                edgeSensitivity={26}
+                coneSpread={25}
+              >
                 <button
                   onClick={() => newTournament()}
                   data-cursor="hover"
-                  className="group inline-flex items-center gap-3 bg-blood-600 px-7 py-4 transition-colors hover:bg-blood-500"
+                  className="group inline-flex items-center gap-3 px-7 py-4"
                 >
                   <span className="text-xs font-bold uppercase tracking-[0.16em] text-white">Criar campeonato</span>
                   <ArrowRight size={16} className="text-white transition-transform duration-300 group-hover:translate-x-1" />
                 </button>
-              </Magnetic>
+              </BorderGlow>
               <button
                 onClick={() => importFromFile()}
                 data-cursor="hover"
@@ -144,23 +186,45 @@ export function HomeScreen() {
           <Reveal delay={0.06}>
             <div className="flex flex-wrap gap-2.5">
               {QUICK_MODELS.map((c) => (
-                <button
+                <BorderGlow
                   key={c.id}
-                  onClick={() => startTournament(championshipInput(c, customTeams, teamOverrides))}
-                  data-cursor="hover"
-                  className="flex items-center gap-2 rounded-full border border-paper/12 px-4 py-2 text-sm font-semibold text-zinc-300 transition hover:border-blood-600 hover:text-zinc-50"
+                  backgroundColor="#16161a"
+                  glowColor="0 90 66"
+                  colors={['#ff6464', '#f83a3a', '#9b1212']}
+                  borderRadius={999}
+                  glowRadius={16}
+                  glowIntensity={1.1}
+                  edgeSensitivity={26}
+                  coneSpread={25}
                 >
-                  <span>{c.emoji}</span>
-                  {c.label}
-                </button>
+                  <button
+                    onClick={() => startTournament(championshipInput(c, customTeams, teamOverrides))}
+                    data-cursor="hover"
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-zinc-300 transition hover:text-zinc-50"
+                  >
+                    <span>{c.emoji}</span>
+                    {c.label}
+                  </button>
+                </BorderGlow>
               ))}
-              <button
-                onClick={() => startTournament(randomInput(customTeams, teamOverrides))}
-                data-cursor="hover"
-                className="flex items-center gap-2 rounded-full bg-blood-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-blood-500"
+              <BorderGlow
+                backgroundColor="#16161a"
+                glowColor="0 90 66"
+                colors={['#ff6464', '#f83a3a', '#9b1212']}
+                borderRadius={999}
+                glowRadius={16}
+                glowIntensity={1.1}
+                edgeSensitivity={26}
+                coneSpread={25}
               >
-                <Shuffle size={15} /> Surpreenda-me
-              </button>
+                <button
+                  onClick={() => startTournament(randomInput(customTeams, teamOverrides))}
+                  data-cursor="hover"
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white transition"
+                >
+                  <Shuffle size={15} /> Surpreenda-me
+                </button>
+              </BorderGlow>
             </div>
           </Reveal>
         </section>
@@ -266,6 +330,7 @@ export function HomeScreen() {
             </Marquee>
           </section>
         )}
+        </div>
       </div>
     </div>
   )
