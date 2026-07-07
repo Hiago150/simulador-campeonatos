@@ -3,18 +3,51 @@ import { X, Minus, Plus } from 'lucide-react'
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { cx } from '../lib/cx'
+import BorderGlow from './BorderGlow'
 
 type Variant = 'primary' | 'ghost' | 'danger'
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant
   icon?: ReactNode
+  /** classes de layout do item flex (shrink-0, margens…) — vão no wrapper do glow, não no botão. Só usado com variant="primary". */
+  wrapperClassName?: string
 }
 
-export function Button({ variant = 'ghost', icon, children, className, ...rest }: ButtonProps) {
-  const cls = variant === 'primary' ? 'btn-primary' : variant === 'danger' ? 'btn-danger' : 'btn-ghost'
+export function Button({
+  variant = 'ghost',
+  icon,
+  children,
+  className,
+  wrapperClassName,
+  disabled,
+  ...rest
+}: ButtonProps) {
+  if (variant === 'primary') {
+    // Todo botão de ação primária (vermelho) ganha o mesmo brilho reativo ao mouse do
+    // "Criar campeonato" da Home — ver SNIP - Botão com Borda de Brilho Reativa ao Mouse (BorderGlow) no #Mixeng.
+    return (
+      <BorderGlow
+        className={cx(wrapperClassName, disabled && 'pointer-events-none opacity-60')}
+        backgroundColor="#16161a"
+        glowColor="0 90 66"
+        colors={['#ff6464', '#f83a3a', '#9b1212']}
+        borderRadius={999}
+        glowRadius={18}
+        glowIntensity={1.1}
+        edgeSensitivity={26}
+        coneSpread={25}
+      >
+        <button className={cx('btn-primary-glow', className)} disabled={disabled} {...rest}>
+          {icon}
+          {children}
+        </button>
+      </BorderGlow>
+    )
+  }
+  const cls = variant === 'danger' ? 'btn-danger' : 'btn-ghost'
   return (
-    <button className={cx(cls, className)} {...rest}>
+    <button className={cx(cls, className)} disabled={disabled} {...rest}>
       {icon}
       {children}
     </button>

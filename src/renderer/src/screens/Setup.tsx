@@ -383,12 +383,15 @@ export function SetupScreen() {
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
-              <button
+              <Button
+                variant="primary"
                 onClick={() => setCreateOpen(true)}
-                className="btn-primary shrink-0 px-3 py-2 text-xs"
+                wrapperClassName="shrink-0"
+                className="px-3 py-2 text-xs"
+                icon={<Plus size={14} />}
               >
-                <Plus size={14} /> Criar time
-              </button>
+                Criar time
+              </Button>
             </div>
             <div className="mb-3 flex flex-wrap gap-1.5">
               {(['all', ...categories] as (TeamCategory | 'all')[]).map((c) => (
@@ -660,7 +663,8 @@ export function SetupScreen() {
             </p>
             <Button
               variant="primary"
-              className="shrink-0 px-7 py-3 text-base"
+              wrapperClassName="shrink-0"
+              className="px-7 py-3 text-base"
               disabled={errors.length > 0}
               icon={<Rocket size={18} />}
               onClick={handleStart}

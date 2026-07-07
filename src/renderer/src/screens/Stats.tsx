@@ -53,7 +53,7 @@ export function StatsScreen() {
             title="Nenhum campeonato para analisar"
             hint="Crie e simule um campeonato para ver gráficos de evolução, confrontos e a corrida pelo título."
           />
-          <Button variant="primary" icon={<Plus size={16} />} className="mt-2" onClick={() => newTournament()}>
+          <Button variant="primary" icon={<Plus size={16} />} wrapperClassName="mt-2" onClick={() => newTournament()}>
             Criar campeonato
           </Button>
         </div>

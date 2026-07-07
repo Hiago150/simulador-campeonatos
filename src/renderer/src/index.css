@@ -81,6 +81,10 @@ body {
   .btn-primary {
     @apply btn bg-blood-600 text-white hover:bg-blood-500 active:scale-[0.98];
   }
+  /* usado dentro do BorderGlow (Button variant="primary") — sem fundo próprio, o card escuro + glow vêm do wrapper */
+  .btn-primary-glow {
+    @apply btn text-white active:scale-[0.98];
+  }
   .btn-ghost {
     @apply btn border border-white/10 bg-white/[0.03] text-zinc-200 hover:bg-white/[0.07];
   }
