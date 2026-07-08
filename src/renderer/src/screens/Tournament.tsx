@@ -40,6 +40,7 @@ import { MatchModal } from '../components/MatchModal'
 import { Bracket } from '../components/Bracket'
 import { FitScale } from '../components/FitScale'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import Silk from '../components/Silk'
 import {
   matchMoments,
   roundHighlights,
@@ -165,15 +166,15 @@ export function TournamentScreen() {
                   {SPORT_META[t.sport].emoji} {SPORT_META[t.sport].label}
                 </span>
                 {t.sport === 'esports' && t.config.game && (
-                  <span className="tag bg-ink-800 text-zinc-300">
+                  <span className="tag hidden bg-ink-800 text-zinc-300 sm:inline-flex">
                     {GAME_META[t.config.game].emoji} {GAME_META[t.config.game].short}
                   </span>
                 )}
                 <span className="tag bg-ink-800 text-zinc-300">{meta.label}</span>
                 {chaosLabel(t.config) && (
-                  <span className="tag bg-blood-950/50 text-blood-300">🎲 {chaosLabel(t.config)}</span>
+                  <span className="tag hidden bg-blood-950/50 text-blood-300 sm:inline-flex">🎲 {chaosLabel(t.config)}</span>
                 )}
-                {t.config.momentum && <span className="tag bg-ink-800 text-zinc-300">🔥 Forma</span>}
+                {t.config.momentum && <span className="tag hidden bg-ink-800 text-zinc-300 sm:inline-flex">🔥 Forma</span>}
                 <span className="tag bg-ink-800 text-zinc-500">{t.teams.length} times</span>
               </div>
             </div>
@@ -183,14 +184,12 @@ export function TournamentScreen() {
           <div className="flex flex-wrap items-center justify-end gap-2">
             <HeaderMenu
               items={[
+                { label: 'Refazer', icon: <RotateCcw size={15} />, onClick: handleReset },
                 { label: 'Salvar na biblioteca', icon: <Save size={15} />, onClick: saveCurrentToLibrary },
                 { label: 'Exportar', icon: <Download size={15} />, onClick: exportCurrent }
               ]}
             />
-            <Button icon={<RotateCcw size={15} />} onClick={handleReset}>
-              Refazer
-            </Button>
-            {!finished && (
+            {!finished && !mcActive && (
               <Button
                 icon={<FastForward size={15} />}
                 disabled={roundInfo.matchIds.length === 0}
@@ -199,12 +198,13 @@ export function TournamentScreen() {
                 Simular {roundInfo.label.split(' · ')[0].toLowerCase()}
               </Button>
             )}
-            {!finished && t.phase === 'group' && (
+            {!finished && !mcActive && t.phase === 'group' && (
               <Button icon={<LayoutGrid size={15} />} onClick={simPhase}>
-                Simular fase de grupos
+                <span className="hidden sm:inline">Simular fase de grupos</span>
+                <span className="sm:hidden">Fase de grupos</span>
               </Button>
             )}
-            {!finished && (
+            {!finished && !mcActive && (
               <Button variant="primary" icon={<Dices size={17} />} onClick={simAll}>
                 Aleatorizar tudo
               </Button>
@@ -245,51 +245,67 @@ export function TournamentScreen() {
           </span>
         </div>
 
-        {/* Monte Carlo — controles */}
+        {/* Monte Carlo — modo de simulação em massa (substitui os controles normais) */}
         {mcActive && (
-          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-blood-800/30 bg-blood-950/15 px-3 py-2.5">
-            <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-blood-300">
-              <Dices size={14} /> Monte Carlo
-            </span>
-            <span className="tnum rounded-full bg-ink-900/70 px-2 py-0.5 text-xs font-semibold text-zinc-300">
-              {mcDone} / {mcTarget} simulações
-            </span>
-            <div className="ml-auto flex flex-wrap items-center gap-2">
-              <Button
-                icon={<StepForward size={15} />}
-                disabled={mcComplete}
-                onClick={() => {
-                  mcRunOnce()
-                  setMcView('play')
-                }}
-              >
-                Aleatorizar 1× e próxima
-              </Button>
-              <Button
-                variant="primary"
-                icon={<Dices size={16} />}
-                disabled={mcComplete}
-                onClick={() => {
-                  mcRunAll()
-                  setMcView('mc')
-                }}
-              >
-                Aleatorizar tudo
-              </Button>
+          <div className="mt-3 rounded-xl border border-blood-800/30 bg-blood-950/15 px-3 py-2.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-blood-300">
+                <Dices size={14} /> Monte Carlo
+              </span>
+              <span className="tnum rounded-full bg-ink-900/70 px-2 py-0.5 text-xs font-semibold text-zinc-300">
+                {mcDone} / {mcTarget}
+              </span>
+              <div className="ml-auto flex w-full items-center gap-2 sm:w-auto">
+                <Button
+                  icon={<StepForward size={15} />}
+                  disabled={mcComplete}
+                  className="flex-1 sm:flex-none"
+                  onClick={() => {
+                    mcRunOnce()
+                    setMcView('play')
+                  }}
+                >
+                  Simular 1×
+                </Button>
+                <Button
+                  variant="primary"
+                  icon={<Dices size={16} />}
+                  disabled={mcComplete}
+                  wrapperClassName="flex-1 sm:flex-none"
+                  onClick={() => {
+                    mcRunAll()
+                    setMcView('mc')
+                  }}
+                >
+                  Rodar tudo ({mcTarget}×)
+                </Button>
+              </div>
             </div>
+            <p className="mt-1.5 text-[11px] leading-snug text-zinc-500">
+              Re-simula o campeonato inteiro várias vezes para ver quem mais vira campeão — não altera o histórico.
+            </p>
           </div>
         )}
       </div>
 
       {/* Banner de campeão — a glória é dourada */}
       {finished && champ && (
-        <div className="animate-fade-up border-b border-gold-600/25 bg-gradient-to-r from-gold-950/60 via-gold-950/20 to-transparent px-6 py-4">
+        <div className="animate-fade-up relative isolate overflow-hidden border-b border-gold-600/25 px-6 py-4">
+          {/* Fundo "Silk" animado (mesmo efeito da Home), tonalizado em dourado */}
+          <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+            <div className="absolute inset-0 opacity-30">
+              <Silk color="#96691d" speed={1.8} scale={1.5} noiseIntensity={1} rotation={0} />
+            </div>
+            <div className="absolute inset-0 bg-gradient-to-r from-gold-950/75 via-gold-950/35 to-ink-950/60" />
+          </div>
           <div className="flex items-center gap-4">
-            <Trophy size={28} className="text-gold-400" />
+            <Trophy size={28} className="text-gold-400 drop-shadow-[0_0_10px_rgba(224,175,80,0.4)]" />
             <TeamBadge team={champ} size="lg" />
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-gold-400">Campeão</p>
-              <p className="display text-4xl text-zinc-100">{champ.name}</p>
+              <p className="display bg-gold-grad bg-clip-text text-4xl text-transparent drop-shadow-[0_0_18px_rgba(224,175,80,0.3)]">
+                {champ.name}
+              </p>
             </div>
           </div>
         </div>

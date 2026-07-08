@@ -67,7 +67,35 @@ const NATIONS: Seed[] = [
   { id: 'coreia', name: 'Coreia do Sul', shortName: 'KOR', strength: 76, color: '#003478', country: 'Coreia do Sul' },
   { id: 'servia', name: 'Sérvia', shortName: 'SRB', strength: 76, color: '#c6363c', country: 'Sérvia' },
   { id: 'equador', name: 'Equador', shortName: 'ECU', strength: 75, color: '#ffd100', country: 'Equador' },
-  { id: 'australia', name: 'Austrália', shortName: 'AUS', strength: 73, color: '#00843d', country: 'Austrália' }
+  { id: 'australia', name: 'Austrália', shortName: 'AUS', strength: 73, color: '#00843d', country: 'Austrália' },
+  // ---- Copa do Mundo 2026 (48 seleções) — completando as que faltavam ----
+  { id: 'canada', name: 'Canadá', shortName: 'CAN', strength: 74, color: '#ff0000', country: 'Canadá' },
+  { id: 'paraguai', name: 'Paraguai', shortName: 'PAR', strength: 74, color: '#0038a8', country: 'Paraguai' },
+  { id: 'austria', name: 'Áustria', shortName: 'AUT', strength: 79, color: '#ed2939', country: 'Áustria' },
+  { id: 'noruega', name: 'Noruega', shortName: 'NOR', strength: 79, color: '#ba0c2f', country: 'Noruega' },
+  { id: 'escocia', name: 'Escócia', shortName: 'SCO', strength: 76, color: '#0065bd', country: 'Escócia' },
+  { id: 'suecia', name: 'Suécia', shortName: 'SWE', strength: 76, color: '#006aa7', country: 'Suécia' },
+  { id: 'turquia', name: 'Turquia', shortName: 'TUR', strength: 78, color: '#e30a17', country: 'Turquia' },
+  { id: 'tchequia', name: 'Tchéquia', shortName: 'CZE', strength: 74, color: '#11457e', country: 'Tchéquia' },
+  { id: 'bosnia', name: 'Bósnia e Herzegovina', shortName: 'BIH', strength: 73, color: '#002395', country: 'Bósnia e Herzegovina' },
+  { id: 'costa-do-marfim', name: 'Costa do Marfim', shortName: 'CIV', strength: 76, color: '#f77f00', country: 'Costa do Marfim' },
+  { id: 'egito', name: 'Egito', shortName: 'EGY', strength: 73, color: '#ce1126', country: 'Egito' },
+  { id: 'argelia', name: 'Argélia', shortName: 'ALG', strength: 74, color: '#006233', country: 'Argélia' },
+  { id: 'tunisia', name: 'Tunísia', shortName: 'TUN', strength: 71, color: '#e70013', country: 'Tunísia' },
+  { id: 'gana', name: 'Gana', shortName: 'GHA', strength: 72, color: '#ce1126', country: 'Gana' },
+  { id: 'africa-do-sul', name: 'África do Sul', shortName: 'RSA', strength: 68, color: '#007a4d', country: 'África do Sul' },
+  { id: 'cabo-verde', name: 'Cabo Verde', shortName: 'CPV', strength: 68, color: '#003893', country: 'Cabo Verde' },
+  { id: 'rd-congo', name: 'RD Congo', shortName: 'COD', strength: 65, color: '#007fff', country: 'RD Congo' },
+  { id: 'arabia-saudita', name: 'Arábia Saudita', shortName: 'KSA', strength: 68, color: '#006c35', country: 'Arábia Saudita' },
+  { id: 'catar', name: 'Catar', shortName: 'QAT', strength: 66, color: '#8d1b3d', country: 'Catar' },
+  { id: 'ira', name: 'Irã', shortName: 'IRN', strength: 76, color: '#239f40', country: 'Irã' },
+  { id: 'iraque', name: 'Iraque', shortName: 'IRQ', strength: 66, color: '#ce1126', country: 'Iraque' },
+  { id: 'jordania', name: 'Jordânia', shortName: 'JOR', strength: 64, color: '#007a3d', country: 'Jordânia' },
+  { id: 'uzbequistao', name: 'Uzbequistão', shortName: 'UZB', strength: 63, color: '#0099b5', country: 'Uzbequistão' },
+  { id: 'panama', name: 'Panamá', shortName: 'PAN', strength: 68, color: '#da121a', country: 'Panamá' },
+  { id: 'haiti', name: 'Haiti', shortName: 'HAI', strength: 58, color: '#00209f', country: 'Haiti' },
+  { id: 'curacao', name: 'Curaçao', shortName: 'CUW', strength: 60, color: '#002b7f', country: 'Curaçao' },
+  { id: 'nova-zelandia', name: 'Nova Zelândia', shortName: 'NZL', strength: 62, color: '#000000', country: 'Nova Zelândia' }
 ]
 
 // ---------------- E-sports ----------------
@@ -307,11 +335,64 @@ const EXTRA_CLUBS: Seed[] = [
   { id: 'america-mx', name: 'Club América', shortName: 'AME', strength: 76, color: '#ffd700', country: 'México' }
 ]
 
+// ---------------- Divisões de acesso (Série B/C, Championship, 2. Bundesliga) ----------------
+const LOWER_DIVISION_CLUBS: Seed[] = [
+  // Brasil – Série B
+  { id: 'vila-nova', name: 'Vila Nova', shortName: 'VIL', strength: 66, color: '#ff0000', country: 'Brasil' },
+  { id: 'remo', name: 'Remo', shortName: 'REM', strength: 66, color: '#005baa', country: 'Brasil' },
+  { id: 'paysandu', name: 'Paysandu', shortName: 'PAY', strength: 65, color: '#00693e', country: 'Brasil' },
+  { id: 'amazonas-fc', name: 'Amazonas FC', shortName: 'AMA', strength: 64, color: '#00923f', country: 'Brasil' },
+  { id: 'ferroviaria', name: 'Ferroviária', shortName: 'FER', strength: 64, color: '#004b93', country: 'Brasil' },
+  { id: 'athletic-mg', name: 'Athletic Club', shortName: 'ATH', strength: 63, color: '#111111', country: 'Brasil' },
+  { id: 'volta-redonda', name: 'Volta Redonda', shortName: 'VOL', strength: 63, color: '#ffd700', country: 'Brasil' },
+  { id: 'atletico-go', name: 'Atlético-GO', shortName: 'ACG', strength: 65, color: '#ff0000', country: 'Brasil' },
+  { id: 'nautico', name: 'Náutico', shortName: 'NAU', strength: 64, color: '#e30613', country: 'Brasil' },
+  { id: 'csa', name: 'CSA', shortName: 'CSA', strength: 63, color: '#111111', country: 'Brasil' },
+  // Brasil – Série C
+  { id: 'abc', name: 'ABC', shortName: 'ABC', strength: 61, color: '#111111', country: 'Brasil' },
+  { id: 'confianca', name: 'Confiança', shortName: 'CON', strength: 60, color: '#f5c400', country: 'Brasil' },
+  { id: 'sao-bernardo', name: 'São Bernardo', shortName: 'SBE', strength: 59, color: '#005baa', country: 'Brasil' },
+  { id: 'ypiranga', name: 'Ypiranga-RS', shortName: 'YPI', strength: 59, color: '#111111', country: 'Brasil' },
+  { id: 'brusque', name: 'Brusque', shortName: 'BRU', strength: 60, color: '#005baa', country: 'Brasil' },
+  { id: 'figueirense', name: 'Figueirense', shortName: 'FIG', strength: 60, color: '#111111', country: 'Brasil' },
+  { id: 'botafogo-pb', name: 'Botafogo-PB', shortName: 'BFP', strength: 59, color: '#111111', country: 'Brasil' },
+  { id: 'tombense', name: 'Tombense', shortName: 'TOM', strength: 61, color: '#005baa', country: 'Brasil' },
+  // Inglaterra – Championship
+  { id: 'sheffield-wed', name: 'Sheffield Wednesday', shortName: 'SHW', strength: 68, color: '#0066b3', country: 'Inglaterra' },
+  { id: 'middlesbrough', name: 'Middlesbrough', shortName: 'MID', strength: 69, color: '#e2231a', country: 'Inglaterra' },
+  { id: 'west-brom', name: 'West Bromwich Albion', shortName: 'WBA', strength: 69, color: '#122f67', country: 'Inglaterra' },
+  { id: 'norwich', name: 'Norwich City', shortName: 'NOR', strength: 68, color: '#00a650', country: 'Inglaterra' },
+  { id: 'watford', name: 'Watford', shortName: 'WAT', strength: 67, color: '#fbee23', country: 'Inglaterra' },
+  { id: 'coventry', name: 'Coventry City', shortName: 'COV', strength: 68, color: '#78b9e7', country: 'Inglaterra' },
+  { id: 'preston', name: 'Preston North End', shortName: 'PRE', strength: 66, color: '#b2b2b2', country: 'Inglaterra' },
+  { id: 'blackburn', name: 'Blackburn Rovers', shortName: 'BLA', strength: 67, color: '#009ee0', country: 'Inglaterra' },
+  { id: 'millwall', name: 'Millwall', shortName: 'MIL', strength: 66, color: '#001b3a', country: 'Inglaterra' },
+  { id: 'hull', name: 'Hull City', shortName: 'HUL', strength: 66, color: '#f18a00', country: 'Inglaterra' },
+  { id: 'swansea', name: 'Swansea City', shortName: 'SWA', strength: 67, color: '#000000', country: 'Inglaterra' },
+  { id: 'cardiff', name: 'Cardiff City', shortName: 'CAR', strength: 65, color: '#0070b5', country: 'Inglaterra' },
+  { id: 'qpr', name: 'Queens Park Rangers', shortName: 'QPR', strength: 65, color: '#1d5ba4', country: 'Inglaterra' },
+  { id: 'stoke', name: 'Stoke City', shortName: 'STK', strength: 67, color: '#e03a3e', country: 'Inglaterra' },
+  { id: 'bristol-city', name: 'Bristol City', shortName: 'BRC', strength: 66, color: '#e21c21', country: 'Inglaterra' },
+  { id: 'portsmouth', name: 'Portsmouth', shortName: 'POR', strength: 65, color: '#001489', country: 'Inglaterra' },
+  // Alemanha – 2. Bundesliga
+  { id: 'hamburgo', name: 'Hamburger SV', shortName: 'HSV', strength: 70, color: '#0f1c2e', country: 'Alemanha' },
+  { id: 'fortuna-dus', name: 'Fortuna Düsseldorf', shortName: 'FOR', strength: 66, color: '#e2231a', country: 'Alemanha' },
+  { id: 'hannover', name: 'Hannover 96', shortName: 'H96', strength: 67, color: '#0c9639', country: 'Alemanha' },
+  { id: 'kaiserslautern', name: '1. FC Kaiserslautern', shortName: 'FCK', strength: 65, color: '#e2231a', country: 'Alemanha' },
+  { id: 'karlsruher', name: 'Karlsruher SC', shortName: 'KSC', strength: 64, color: '#0057a8', country: 'Alemanha' },
+  { id: 'elversberg', name: 'SV Elversberg', shortName: 'ELV', strength: 63, color: '#111111', country: 'Alemanha' },
+  { id: 'greuther-furth', name: 'Greuther Fürth', shortName: 'GRF', strength: 63, color: '#00834a', country: 'Alemanha' },
+  { id: 'braunschweig', name: 'Eintracht Braunschweig', shortName: 'BRA', strength: 62, color: '#f5c400', country: 'Alemanha' },
+  { id: 'nurnberg', name: '1. FC Nürnberg', shortName: 'NUR', strength: 65, color: '#ba0c2f', country: 'Alemanha' },
+  { id: 'paderborn', name: 'SC Paderborn', shortName: 'PAD', strength: 64, color: '#003da5', country: 'Alemanha' }
+]
+
 export const PRESET_TEAMS: Team[] = [
   ...make(EURO_CLUBS, 'club', 'football'),
   ...make(BR_CLUBS, 'club', 'football'),
   ...make(EXTRA_CLUBS, 'club', 'football'),
   ...make(MORE_CLUBS, 'club', 'football'),
+  ...make(LOWER_DIVISION_CLUBS, 'club', 'football'),
   ...make(NATIONS, 'national', 'football'),
   ...make(ESPORTS, 'club', 'esports'),
   ...make(EXTRA_ESPORTS, 'club', 'esports')
