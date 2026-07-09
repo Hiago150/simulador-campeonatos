@@ -56,7 +56,35 @@ const TEAMS = {
   saw: ['SAW'],
   'eternal-fire': ['Eternal Fire'],
   gamerlegion: ['GamerLegion'],
-  apeks: ['Apeks']
+  apeks: ['Apeks'],
+  // times existentes sem elenco de Valorant que ganharam logo agora
+  cloud9: ['Cloud9'],
+  liquid: ['Team Liquid'],
+  // VCT 2026 — franquias que faltavam
+  envy: ['Envy', 'Team Envy'],
+  'all-gamers': ['All Gamers'],
+  'bilibili-gaming': ['Bilibili Gaming'],
+  'funplus-phoenix': ['FunPlus Phoenix'],
+  'jd-gaming': ['JD Gaming'],
+  'nova-esports': ['Nova Esports'],
+  'titan-esports': ['Titan Esports Club', 'Titan Esports'],
+  'trace-esports': ['Trace Esports'],
+  tyloo: ['TYLOO'],
+  'wolves-esports': ['Wolves Esports'],
+  'dragon-ranger': ['Dragon Ranger Gaming'],
+  'xlg-esports': ['XLG Esports'],
+  'bbl-esports': ['BBL Esports'],
+  'fut-esports': ['FUT Esports'],
+  giantx: ['GIANTX'],
+  pcific: ['PCIFIC Esports'],
+  detonation: ['DetonatioN FocusMe'],
+  'global-esports': ['Global Esports'],
+  rrq: ['Rex Regum Qeon'],
+  'team-secret': ['Team Secret'],
+  'zeta-division': ['ZETA DIVISION'],
+  'full-sense': ['FULL SENSE'],
+  nongshim: ['Nongshim RedForce'],
+  varrel: ['VARREL']
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))

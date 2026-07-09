@@ -152,6 +152,38 @@ const EXTRA_ESPORTS: Seed[] = [
   { id: 'apeks', name: 'Apeks', shortName: 'APX', strength: 78, color: '#ff5a36' }
 ]
 
+// ---------------- VCT 2026 — franquias que faltavam (Valorant) ----------------
+const VCT_2026: Seed[] = [
+  // Americas
+  { id: 'envy', name: 'Envy', shortName: 'NV', strength: 78, color: '#111111' },
+  // China
+  { id: 'all-gamers', name: 'All Gamers', shortName: 'AG', strength: 76, color: '#0a4b9e' },
+  { id: 'bilibili-gaming', name: 'Bilibili Gaming', shortName: 'BLG', strength: 77, color: '#fb7299' },
+  { id: 'funplus-phoenix', name: 'FunPlus Phoenix', shortName: 'FPX', strength: 78, color: '#f36c21' },
+  { id: 'jd-gaming', name: 'JD Gaming', shortName: 'JDG', strength: 79, color: '#e2231a' },
+  { id: 'nova-esports', name: 'Nova Esports', shortName: 'NOVA', strength: 77, color: '#7b2cbf' },
+  { id: 'titan-esports', name: 'Titan Esports Club', shortName: 'TEC', strength: 76, color: '#9b1212' },
+  { id: 'trace-esports', name: 'Trace Esports', shortName: 'TE', strength: 75, color: '#00a9a5' },
+  { id: 'tyloo', name: 'TYLOO', shortName: 'TYL', strength: 76, color: '#cc0000' },
+  { id: 'wolves-esports', name: 'Wolves Esports', shortName: 'WOL', strength: 75, color: '#1a2f6b' },
+  { id: 'dragon-ranger', name: 'Dragon Ranger Gaming', shortName: 'DRG', strength: 74, color: '#c8102e' },
+  { id: 'xlg-esports', name: 'XLG Esports', shortName: 'XLG', strength: 74, color: '#1f6fd0' },
+  // EMEA
+  { id: 'bbl-esports', name: 'BBL Esports', shortName: 'BBL', strength: 78, color: '#e2231a' },
+  { id: 'fut-esports', name: 'FUT Esports', shortName: 'FUT', strength: 78, color: '#f5820b' },
+  { id: 'giantx', name: 'GIANTX', shortName: 'GX', strength: 79, color: '#0a8a4a' },
+  { id: 'pcific', name: 'PCIFIC Esports', shortName: 'PCI', strength: 75, color: '#00a9e0' },
+  // Pacific
+  { id: 'detonation', name: 'DetonatioN FocusMe', shortName: 'DFM', strength: 76, color: '#f5820b' },
+  { id: 'global-esports', name: 'Global Esports', shortName: 'GE', strength: 74, color: '#1a2f6b' },
+  { id: 'rrq', name: 'Rex Regum Qeon', shortName: 'RRQ', strength: 79, color: '#d4af37' },
+  { id: 'team-secret', name: 'Team Secret', shortName: 'TS', strength: 75, color: '#e2231a' },
+  { id: 'zeta-division', name: 'ZETA DIVISION', shortName: 'ZETA', strength: 77, color: '#111111' },
+  { id: 'full-sense', name: 'FULL SENSE', shortName: 'FS', strength: 76, color: '#0a4b9e' },
+  { id: 'nongshim', name: 'Nongshim RedForce', shortName: 'NS', strength: 80, color: '#e2231a' },
+  { id: 'varrel', name: 'VARREL', shortName: 'VRL', strength: 78, color: '#111111' }
+]
+
 // ---------------- +100 clubes adicionais ----------------
 const MORE_CLUBS: Seed[] = [
   // Brasil – Série A e grandes clubes
@@ -395,7 +427,8 @@ export const PRESET_TEAMS: Team[] = [
   ...make(LOWER_DIVISION_CLUBS, 'club', 'football'),
   ...make(NATIONS, 'national', 'football'),
   ...make(ESPORTS, 'club', 'esports'),
-  ...make(EXTRA_ESPORTS, 'club', 'esports')
+  ...make(EXTRA_ESPORTS, 'club', 'esports'),
+  ...make(VCT_2026, 'club', 'esports')
 ]
 
 export function presetsForSport(sport: Team['sport']): Team[] {

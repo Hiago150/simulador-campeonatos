@@ -30,27 +30,36 @@ function Row({
   return (
     <div
       className={cx(
-        'flex items-center gap-2 px-2.5 py-1.5',
-        isWinner && played ? 'bg-blood-950/25' : ''
+        'flex items-center gap-1.5 px-2 py-1',
+        isWinner && played ? 'bg-blood-600/30' : played ? 'bg-white/[0.02]' : ''
       )}
     >
-      <TeamBadge team={team} size="sm" />
+      <TeamBadge team={team} size="xs" />
       <span
         className={cx(
-          'flex-1 truncate text-xs font-semibold',
-          !team ? 'text-zinc-600' : isWinner ? 'text-white' : played ? 'text-zinc-500' : 'text-zinc-300'
+          'flex-1 truncate text-[11px] font-bold uppercase tracking-wide',
+          !team ? 'text-zinc-700' : isWinner ? 'text-white' : played ? 'text-zinc-600' : 'text-zinc-300'
         )}
+        title={team?.name}
       >
-        {team?.name ?? (bye ? '—' : 'A definir')}
+        {team?.shortName ?? (bye ? '—' : '???')}
       </span>
       {played && score != null && (
-        <span className={cx('tnum text-sm font-bold', isWinner ? 'text-white' : 'text-zinc-500')}>{score}</span>
+        <span className={cx('tnum shrink-0 text-xs font-black', isWinner ? 'text-white' : 'text-zinc-600')}>
+          {score}
+        </span>
       )}
     </div>
   )
 }
 
-function BracketCard({ bm, matches, teams, onSimulate, onOpen }: Omit<Props, 'bracket' | 'sport'> & { bm: BracketMatch }) {
+function BracketCard({
+  bm,
+  matches,
+  teams,
+  onSimulate,
+  onOpen
+}: Omit<Props, 'bracket' | 'sport'> & { bm: BracketMatch }) {
   const find = (id: string): Match | undefined => matches.find((m) => m.id === id)
   const twoLeg = !!(bm.legIds && bm.legIds.length === 2)
   const leg1 = twoLeg ? find(bm.legIds![0]) : undefined
@@ -99,7 +108,7 @@ function BracketCard({ bm, matches, teams, onSimulate, onOpen }: Omit<Props, 'br
   return (
     <div
       className={cx(
-        'card w-56 divide-y divide-white/5 overflow-hidden transition',
+        'card w-40 divide-y divide-white/5 overflow-hidden transition',
         openMatch && 'cursor-pointer hover:border-white/15'
       )}
       onClick={() => openMatch && onOpen(openMatch)}
@@ -112,9 +121,9 @@ function BracketCard({ bm, matches, teams, onSimulate, onOpen }: Omit<Props, 'br
             e.stopPropagation()
             onSimulate(nextToSim!)
           }}
-          className="no-drag flex w-full items-center justify-center gap-1.5 bg-blood-grad/90 py-1.5 text-[11px] font-bold uppercase tracking-wide text-white transition hover:brightness-110"
+          className="no-drag flex w-full items-center justify-center gap-1 bg-blood-grad/90 py-1 text-[10px] font-bold uppercase tracking-wide text-white transition hover:brightness-110"
         >
-          <Play size={11} fill="currentColor" /> Simular{twoLeg ? (leg1 && !leg1.played ? ' ida' : ' volta') : ''}
+          <Play size={9} fill="currentColor" /> Simular{twoLeg ? (leg1 && !leg1.played ? ' ida' : ' volta') : ''}
         </button>
       )}
       {legsLabel && (
@@ -132,40 +141,51 @@ function BracketCard({ bm, matches, teams, onSimulate, onOpen }: Omit<Props, 'br
   )
 }
 
+const SECTION_LABEL: Record<string, string> = {
+  wb: 'Chave superior',
+  lb: 'Chave inferior',
+  lcb: 'Última chance',
+  gf: 'Grande final'
+}
+
 export function Bracket({ bracket, matches, teams, sport, onSimulate, onOpen, champion: championProp }: Props) {
   const champion = championProp ?? bracket[bracket.length - 1]?.matches[0]?.winnerId
   const champTeam = champion ? teams[champion] : undefined
 
-  return (
-    <div className="flex w-max gap-6 pb-2">
-      {bracket.map((round) => (
-        <div key={round.index} className="flex min-w-[14rem] flex-col">
-          <div className="mb-3 text-center">
-            <span className="tag bg-ink-800 text-zinc-400">{round.name}</span>
-          </div>
-          <div className="flex flex-1 flex-col justify-around gap-4">
-            {round.matches.map((bm) => (
-              <BracketCard
-                key={bm.id}
-                bm={bm}
-                matches={matches}
-                teams={teams}
-                onSimulate={onSimulate}
-                onOpen={onOpen}
-              />
-            ))}
-          </div>
-        </div>
-      ))}
+  let lastSection: string | undefined
 
-      {/* Coluna do campeão */}
-      <div className="flex min-w-[14rem] flex-col justify-center">
-        <div className="mb-3 text-center">
-          <span className="tag bg-blood-grad text-white">Campeão</span>
-        </div>
+  return (
+    <div className="flex flex-col gap-5">
+      {bracket.map((round) => {
+        const section = round.section
+        const showSectionHeader = !!section && section !== lastSection
+        lastSection = section
+
+        return (
+          <div key={round.index}>
+            {showSectionHeader && (
+              <p className="mb-1.5 text-xs font-bold uppercase tracking-widest text-blood-400">
+                {SECTION_LABEL[section!] ?? section}
+              </p>
+            )}
+            <div className="mb-2">
+              <span className="tag bg-ink-800 text-zinc-400">{round.name}</span>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              {round.matches.map((bm) => (
+                <BracketCard key={bm.id} bm={bm} matches={matches} teams={teams} onSimulate={onSimulate} onOpen={onOpen} />
+              ))}
+            </div>
+          </div>
+        )
+      })}
+
+      {/* Campeão */}
+      <div className="flex flex-col items-center gap-3 border-t border-white/5 pt-5">
+        <span className="tag bg-blood-grad text-white">Campeão</span>
         <div
           className={cx(
-            'card flex flex-col items-center gap-3 px-4 py-6 text-center',
+            'card flex flex-col items-center gap-3 px-6 py-6 text-center',
             champTeam && 'border-blood-700/50 shadow-glow'
           )}
         >

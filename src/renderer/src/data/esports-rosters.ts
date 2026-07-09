@@ -32,7 +32,7 @@ export const ESPORTS_ROSTERS: Record<EsportsGame, Record<string, string[]>> = {
     // Gen.G está oficialmente com 4 (Lakia saiu em 01/07/26)
     geng: ['ZynX', 'Ash', 'Karon', 't3xture'],
     t1: ['Munchkin', 'stax', 'Meteor', 'BuZz', 'iZu'],
-    fnatic: ['Boaster', 'crashies', 'kaajak', 'Veqaj', 'Alfajer'],
+    fnatic: ['Boaster', 'crashies', 'kaajak', 'Cloud', 'Alfajer'],
     nrg: ['Ethan', 'keiko', 'brawk', 'mada', 'skuba'],
     'hundred-thieves': ['vora', 'Cryocells', 'Asuna', 'Timotino', 'bang'],
     heretics: ['Boo', 'koshmaras', 'Wo0t', 'RieNs', 'benjyfishy'],
@@ -46,7 +46,37 @@ export const ESPORTS_ROSTERS: Record<EsportsGame, Record<string, string[]>> = {
     mibr: ['zekken', 'tex', 'Mazino', 'Verno', 'aspas'],
     kru: ['saadhak', 'mwzera', 'Less', 'Dantedeu5', 'heat'],
     furia: ['artzin', 'basic', 'Shyy', 'eeiu', 'koalanoob'],
-    g2: ['valyn', 'jawgemo', 'BABYBAY', 'trent', 'leaf']
+    g2: ['valyn', 'jawgemo', 'BABYBAY', 'trent', 'leaf'],
+    // times já existentes no app (org de CS2) que faltava o elenco de Valorant
+    cloud9: ['OXY', 'Zellsis', 'Jackk', 'Notexxd', 'FireBallOps'],
+    liquid: ['nAts', 'kamo', 'MiniBoo', 'purp0', 'wayne'],
+    'eternal-fire': ['Izzy', 'audaz', 'Favian', 'echo', 'nekky'],
+    // VCT 2026 — franquias que faltavam
+    envy: ['Eggsterr', 'keznit', 'Rossy', 'Demon1', 'GLYPH'],
+    'all-gamers': ['Shr1mp', 'K1ra', 'Au1', 'f4ngeer', 'iamgrq'],
+    'bilibili-gaming': ['whz', 'Knight', 'nephh', 'rushia', 'bud'],
+    'funplus-phoenix': ['AAAAY', 'Setrod', 'kovaQ', 'coconut', 'Xlele'],
+    'jd-gaming': ['jkuro', 'Yuicaw', 'zhe', 'BerLIN', 'crownfisher'],
+    'nova-esports': ['GuanG', 'Ezeir', 'Green', 'qiutiaN', 'swagzor'],
+    'titan-esports': ['Haodong', 'dynamite', 'CoCo', 'lucas', 'Spitfires'],
+    'trace-esports': ['FengF', 'Kai', 'LuoK1ng', 'deLb', 'Abo'],
+    tyloo: ['slowly', 'Scales', 'Splash', 'Erv', 'SiuFatBB'],
+    'wolves-esports': ['Spring', 'yosemite', 'glacier', 'aluba', 'Deryeon'],
+    'dragon-ranger': ['Nicc', 'vo0kashu', 'SpiritZ1', 'Flex1n', 'Life'],
+    'xlg-esports': ['Rarga', 'happywei', 'NoMan', 'Lysoar', 'WsLeo'],
+    'bbl-esports': ['Crewen', 'Lar0k', 'Loita', 'lovers rock', 'Rosé'],
+    'fut-esports': ['yetujey', 'xeus', 'KROSTALY', 's0pp', 'sociablEE'],
+    // GIANTX oficialmente com 4 (Cloud saiu, foi pro Fnatic)
+    giantx: ['westside', 'ara', 'Flickless', 'GRUBINHO'],
+    pcific: ['NINJA', 'qpert', 'seven', 'al0rante', 'cNed'],
+    detonation: ['Meiy', 'SSeeS', 'yatsuka', 'Caedye', 'Akame'],
+    rrq: ['crazyguy', 'Monyet', 'xffero', 'Jemkin', 'Kushy'],
+    'full-sense': ['Crws', 'Killua', 'thyy', 'JitBoyS', 'primmie'],
+    nongshim: ['Xross', 'Rb', 'Francis', 'Dambi', 'Ivy'],
+    varrel: ['Foxy9', 'C1ndeR', 'Klaus', 'XuNa', 'oonzmlp']
+    // Global Esports, Team Secret e ZETA DIVISION ficaram de fora: fontes
+    // conflitantes na pesquisa, sem confiança suficiente — caem no gerador
+    // procedural até serem conferidos com mais calma.
   }
 }
 

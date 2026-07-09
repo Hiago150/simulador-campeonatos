@@ -13,6 +13,7 @@ export function contrastText(hex: string): string {
 }
 
 const SIZES = {
+  xs: 'h-5 w-5 text-[8px] rounded',
   sm: 'h-7 w-7 text-[10px] rounded-md',
   md: 'h-10 w-10 text-xs rounded-lg',
   lg: 'h-14 w-14 text-base rounded-xl',

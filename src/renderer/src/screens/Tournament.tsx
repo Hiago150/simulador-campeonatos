@@ -38,7 +38,6 @@ import { StandingsTable } from '../components/StandingsTable'
 import { MatchCard } from '../components/MatchCard'
 import { MatchModal } from '../components/MatchModal'
 import { Bracket } from '../components/Bracket'
-import { FitScale } from '../components/FitScale'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import Silk from '../components/Silk'
 import {
@@ -852,9 +851,7 @@ function CupView({ t, teams, currentIds, onSim, onOpen }: ViewProps) {
 
       <div className="card p-5">
         <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">Chaveamento</p>
-        <FitScale>
-          <Bracket bracket={t.bracket} matches={t.matches} teams={teams} sport={t.sport} champion={t.champion} onSimulate={onSim} onOpen={onOpen} />
-        </FitScale>
+        <Bracket bracket={t.bracket} matches={t.matches} teams={teams} sport={t.sport} champion={t.champion} onSimulate={onSim} onOpen={onOpen} />
       </div>
     </div>
   )
