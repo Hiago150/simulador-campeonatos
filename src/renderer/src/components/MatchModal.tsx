@@ -1,10 +1,15 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { motion } from 'framer-motion'
 import type { Match, Sport, Team } from '../types'
 import { Modal } from './ui'
 import { TeamBadge } from './TeamBadge'
 import { cx } from '../lib/cx'
 import { matchMoments, esportsHighlightOptions, type Moment } from '../lib/narration'
-import { Check, Copy, Crosshair, Flame, Goal, Info, Map as MapIcon, Share2, Square, Star, Zap } from 'lucide-react'
+import { matchTimeline, type PlaybackEvent } from '../engine/playback'
+import {
+  Check, Copy, Crosshair, Flame, Goal, Hand, Info, Map as MapIcon, Pause, Play,
+  Share2, Square, Star, Target, X, Zap
+} from 'lucide-react'
 
 /** ícone do lance: destaques ganham cor de acento (verde = brilho, vermelho = decisivo) */
 function MomentIcon({ mo }: { mo: Moment }) {
@@ -24,6 +29,188 @@ function MomentIcon({ mo }: { mo: Moment }) {
     default:
       return <Info size={15} className="shrink-0 text-zinc-500" />
   }
+}
+
+// ─────────────────────────────── Modo Assistir ───────────────────────────────
+
+/** ícone por tipo de evento do replay (mesma paleta dos Lances) */
+function PlaybackIcon({ ev }: { ev: PlaybackEvent }) {
+  switch (ev.kind) {
+    case 'goal':
+      return <Goal size={15} className="shrink-0 text-win-400" />
+    case 'own-goal':
+      return <Goal size={15} className="shrink-0 text-blood-400" />
+    case 'yellow':
+      return <Square size={13} className="shrink-0 fill-gold-500 text-gold-500" />
+    case 'red':
+      return <Square size={13} className="shrink-0 fill-blood-500 text-blood-500" />
+    case 'foul':
+      return <Hand size={14} className="shrink-0 text-zinc-500" />
+    case 'chance':
+      return <Target size={14} className="shrink-0 text-zinc-300" />
+    case 'map-start':
+      return <MapIcon size={15} className="shrink-0 text-zinc-400" />
+    case 'map-end':
+      return <MapIcon size={15} className="shrink-0 text-zinc-200" />
+    case 'map-hot':
+      return <Zap size={15} className="shrink-0 text-zinc-300" />
+    case 'ace':
+    case 'clutch':
+      return <Star size={15} className="shrink-0 text-win-400" />
+    case 'mvp':
+      return <Crosshair size={15} className="shrink-0 text-gold-400" />
+    case 'penalties':
+      return <Flame size={15} className="shrink-0 text-blood-400" />
+    default:
+      return <Info size={15} className="shrink-0 text-zinc-500" />
+  }
+}
+
+const SPEEDS = [1, 2, 4] as const
+// velocidade-base do relógio por segundo real: futebol anda 2 min/s; e-sports 1 passo/s
+const BASE_RATE = { football: 2, esports: 1 } as const
+
+function PlaybackView({
+  match,
+  home,
+  away,
+  onExit
+}: {
+  match: Match
+  home?: Team
+  away?: Team
+  onExit: () => void
+}) {
+  const teams: Record<string, Team> = {}
+  if (home) teams[match.homeId] = home
+  if (away) teams[match.awayId] = away
+  const pb = useMemo(() => matchTimeline(match, teams), [match.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  const [clock, setClock] = useState(0)
+  const [playing, setPlaying] = useState(true)
+  const [speed, setSpeed] = useState<(typeof SPEEDS)[number]>(1)
+
+  const duration = pb?.duration ?? 1
+  const done = clock >= duration
+
+  useEffect(() => {
+    if (!playing || done || !pb) return
+    const iv = setInterval(() => {
+      setClock((c) => Math.min(c + BASE_RATE[pb.kind] * speed * 0.1, duration))
+    }, 100)
+    return () => clearInterval(iv)
+  }, [playing, done, speed, duration, pb])
+
+  if (!pb) return null
+
+  const visible = pb.events.filter((e) => e.at <= clock)
+  const score = [...visible].reverse().find((e) => e.score)?.score ?? [0, 0]
+  const mapsTotal = match.esports?.maps.length ?? 0
+  const clockLabel =
+    pb.kind === 'football'
+      ? `${Math.min(Math.floor(clock), duration)}'`
+      : `Mapa ${Math.min(Math.floor(clock / 10) + 1, mapsTotal)} de ${mapsTotal}`
+
+  return (
+    <div>
+      {/* Placar ao vivo — o placar final fica escondido durante o replay */}
+      <div className="border-b border-white/5 bg-gradient-to-b from-blood-950/30 to-transparent px-6 pb-4 pt-6">
+        <div className="mb-3 flex items-center justify-center gap-2">
+          <span className="relative flex h-2 w-2">
+            <span className={cx('absolute inline-flex h-full w-full rounded-full bg-blood-500 opacity-75', !done && 'animate-ping')} />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-blood-500" />
+          </span>
+          <p className="text-center text-xs font-semibold uppercase tracking-widest text-blood-300">
+            {done ? 'Replay encerrado' : 'Assistindo'} · {clockLabel}
+          </p>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-1 flex-col items-center gap-2">
+            <TeamBadge team={home} size="lg" />
+            <span className="text-center text-sm font-semibold text-zinc-200">{home?.name}</span>
+          </div>
+          <div className="heading tnum px-2 text-4xl font-bold text-white">
+            {score[0]} <span className="text-zinc-600">:</span> {score[1]}
+          </div>
+          <div className="flex flex-1 flex-col items-center gap-2">
+            <TeamBadge team={away} size="lg" />
+            <span className="text-center text-sm font-semibold text-zinc-200">{away?.name}</span>
+          </div>
+        </div>
+
+        {/* Progresso + controles */}
+        <div className="mt-4 flex items-center gap-3">
+          <button
+            onClick={() => (done ? (setClock(0), setPlaying(true)) : setPlaying((p) => !p))}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-blood-600/60 bg-blood-950/40 text-blood-200 transition hover:bg-blood-900/40"
+            aria-label={done ? 'Assistir de novo' : playing ? 'Pausar' : 'Continuar'}
+          >
+            {done || !playing ? <Play size={14} /> : <Pause size={14} />}
+          </button>
+          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-ink-700">
+            <div className="h-full rounded-full bg-blood-500/80 transition-[width]" style={{ width: `${(clock / duration) * 100}%` }} />
+          </div>
+          {SPEEDS.map((s) => (
+            <button
+              key={s}
+              onClick={() => setSpeed(s)}
+              className={cx(
+                'tnum rounded-full border px-2 py-0.5 text-[11px] font-semibold transition',
+                speed === s ? 'border-blood-600 bg-blood-950/40 text-blood-200' : 'border-white/10 text-zinc-500 hover:text-zinc-200'
+              )}
+            >
+              {s}x
+            </button>
+          ))}
+          <button
+            onClick={onExit}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/10 text-zinc-400 transition hover:text-zinc-100"
+            aria-label="Sair do replay"
+            title="Sair do replay"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      </div>
+
+      {/* Feed ao vivo — evento mais recente no topo */}
+      <div className="max-h-[45vh] space-y-1.5 overflow-y-auto px-6 py-4">
+        {[...visible].reverse().map((ev, i) => (
+          <motion.div
+            key={`${ev.at}-${ev.kind}-${visible.length - i}`}
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25 }}
+            className={cx(
+              'flex items-start gap-2.5 rounded-xl px-3 py-2 text-sm',
+              ev.highlight === 'ace'
+                ? 'border-l-2 border-win-500 bg-win-950/40'
+                : ev.highlight === 'decisive'
+                  ? 'border-l-2 border-blood-500 bg-blood-950/25'
+                  : ev.kind === 'goal' || ev.kind === 'map-end'
+                    ? 'bg-ink-900/80'
+                    : 'bg-ink-900/40'
+            )}
+          >
+            <span className="tnum mt-0.5 w-8 shrink-0 text-right text-[11px] text-zinc-600">
+              {pb.kind === 'football' ? `${ev.at}'` : ''}
+            </span>
+            <span className="mt-0.5 shrink-0">
+              <PlaybackIcon ev={ev} />
+            </span>
+            <span
+              className={cx(
+                'leading-snug',
+                ev.highlight || ev.kind === 'goal' ? 'font-medium text-zinc-100' : 'text-zinc-400'
+              )}
+            >
+              {ev.text}
+            </span>
+          </motion.div>
+        ))}
+        {visible.length === 0 && <p className="px-3 py-2 text-xs text-zinc-600">Aquecimento…</p>}
+      </div>
+    </div>
+  )
 }
 
 type MomentFilter = 'all' | 'ace' | 'decisive'
@@ -214,6 +401,20 @@ export function MatchModal({
   onClose: () => void
 }) {
   const open = !!match && match.played
+  const [watching, setWatching] = useState(false)
+  // replay fecha junto com o modal / troca de partida
+  useEffect(() => {
+    if (!open) setWatching(false)
+  }, [open, match?.id])
+
+  if (match && watching && (match.football || match.esports)) {
+    return (
+      <Modal open={open} onClose={onClose} maxWidth="max-w-2xl">
+        <PlaybackView key={match.id} match={match} home={home} away={away} onExit={() => setWatching(false)} />
+      </Modal>
+    )
+  }
+
   return (
     <Modal open={open} onClose={onClose} maxWidth="max-w-2xl">
       {match && (
@@ -246,6 +447,16 @@ export function MatchModal({
                 <span className="text-center text-sm font-semibold text-zinc-200">{away?.name}</span>
               </div>
             </div>
+            {(match.football || match.esports) && (
+              <div className="mt-4 flex justify-center">
+                <button
+                  onClick={() => setWatching(true)}
+                  className="flex items-center gap-2 rounded-full border border-blood-600/60 bg-blood-950/40 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-blood-200 transition hover:bg-blood-900/40"
+                >
+                  <Play size={13} /> Assistir
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="max-h-[55vh] space-y-5 overflow-y-auto px-6 py-5">
