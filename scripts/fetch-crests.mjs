@@ -10,6 +10,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const OUT = resolve(__dirname, '../src/renderer/src/assets/crests')
 const KEY = '3' // chave pública de teste do TheSportsDB
 
+// dicionário compartilhado com fetch-squads.mjs (novos times entram lá)
+import { TEAMS as SHARED_TEAMS } from './football-search.mjs'
+
 // id (igual ao de data/teams.ts) -> nomes candidatos de busca no TheSportsDB
 const TEAMS = {
   // Clubes europeus
@@ -307,8 +310,35 @@ const TEAMS = {
   'greuther-furth': ['Greuther Furth', 'SpVgg Greuther Furth'],
   braunschweig: ['Eintracht Braunschweig'],
   nurnberg: ['1. FC Nurnberg', 'Nurnberg'],
-  paderborn: ['SC Paderborn 07', 'Paderborn']
+  paderborn: ['SC Paderborn 07', 'Paderborn'],
+  // ---- CONMEBOL — clubes sul-americanos ----
+  'colo-colo': ['Colo-Colo', 'CSD Colo-Colo'],
+  'u-de-chile': ['Universidad de Chile', 'U de Chile'],
+  'u-catolica': ['Universidad Catolica', 'CD Universidad Catolica'],
+  penarol: ['Penarol', 'CA Penarol'],
+  'nacional-uy': ['Nacional', 'Club Nacional de Football'],
+  olimpia: ['Olimpia', 'Club Olimpia'],
+  'cerro-porteno': ['Cerro Porteno', 'Club Cerro Porteno'],
+  'atletico-nacional': ['Atletico Nacional', 'Atl. Nacional'],
+  millonarios: ['Millonarios', 'Millonarios FC'],
+  'america-cali': ['America de Cali'],
+  'barcelona-sc': ['Barcelona SC', 'Barcelona Sporting Club'],
+  'ldu-quito': ['LDU Quito', 'Liga de Quito', 'Liga Deportiva Universitaria'],
+  'independiente-del-valle': ['Independiente del Valle'],
+  universitario: ['Universitario', 'Universitario de Deportes'],
+  'alianza-lima': ['Alianza Lima', 'Club Alianza Lima'],
+  bolivar: ['Bolivar', 'Club Bolivar'],
+  'the-strongest': ['The Strongest', 'Club The Strongest'],
+  'deportivo-tachira': ['Deportivo Tachira'],
+  'caracas-fc': ['Caracas FC', 'Caracas'],
+  // dicionário compartilhado por último: novas entradas (ligas CONMEBOL etc.)
+  // entram aqui automaticamente sem duplicar a lista
+  ...SHARED_TEAMS
 }
+
+// A busca do TheSportsDB casa "Athletic Club" com o TRAU (Índia) — escudo
+// errado já baixado 2x. Sem fonte confiável: fica fora até termos idTeam.
+delete TEAMS['athletic-mg']
 
 // Times sem busca confiável → resolvidos direto pelo idTeam do TheSportsDB.
 const ID_OVERRIDE = {

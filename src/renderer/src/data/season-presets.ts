@@ -17,6 +17,12 @@ export interface SeasonPresetSlot {
     swissRounds?: number
   }
   teamIds: string[]
+  /**
+   * Vagas por classificação dinâmica, referenciando outro slot DESTE preset
+   * pelo índice em `slots` (o id real só nasce no wizard). SOMA aos `teamIds`.
+   * `offset` (0-based) permite faixas fora do topo (ex.: 3º e 4º da liga).
+   */
+  qualifiesFrom?: { slot: number; count: number; offset?: number }[]
 }
 
 export interface SeasonPreset {
@@ -50,6 +56,75 @@ const COPA_BRASIL: SeasonPresetSlot = {
 }
 
 const CHAMPIONS = (): SeasonPresetSlot => fromChamp('champions-liga', 'Champions League')
+
+// ─────────────── Pirâmide sul-americana (circuito completo) ───────────────
+// As 10 ligas nacionais rodam de verdade e classificam como na realidade:
+// melhores de cada país → Libertadores (grupos de 32); faixa de baixo das
+// vagas → Pré-Libertadores (mata-mata de 16, 4 sobem). O campeão continental
+// encara o campeão da Champions na Copa Intercontinental.
+const SUL_AMERICANA_SLOTS: SeasonPresetSlot[] = [
+  fromChamp('brasileirao'),                              // 0
+  fromChamp('liga-argentina'),                           // 1
+  fromChamp('liga-chilena'),                             // 2
+  fromChamp('liga-uruguaia'),                            // 3
+  fromChamp('liga-colombiana'),                          // 4
+  fromChamp('liga-equatoriana'),                         // 5
+  fromChamp('liga-peruana'),                             // 6
+  fromChamp('liga-paraguaia'),                           // 7
+  fromChamp('liga-boliviana'),                           // 8
+  fromChamp('liga-venezuelana'),                         // 9
+  {
+    name: 'Pré-Libertadores',
+    format: 'cup',
+    config: {},
+    teamIds: [],
+    // 3º e 4º de cada liga fora BR/ARG — 16 clubes, mata-mata, 4 vagas
+    qualifiesFrom: [2, 3, 4, 5, 6, 7, 8, 9].map((slot) => ({ slot, count: 2, offset: 2 }))
+  },
+  {
+    name: 'Libertadores',
+    format: 'groups',
+    config: { groupCount: 8, qualifiersPerGroup: 2 },
+    teamIds: [],
+    qualifiesFrom: [
+      { slot: 0, count: 6 }, // Brasil: G-6 do Brasileirão
+      { slot: 1, count: 6 }, // Argentina: top 6
+      ...[2, 3, 4, 5, 6, 7, 8, 9].map((slot) => ({ slot, count: 2 })), // top 2 dos demais
+      { slot: 10, count: 4 } // 4 melhores da Pré-Libertadores
+    ]
+  },
+  CHAMPIONS(),                                           // 12
+  {
+    name: 'Copa Intercontinental',
+    format: 'cup',
+    config: {},
+    teamIds: [],
+    qualifiesFrom: [
+      { slot: 11, count: 1 }, // campeão da Libertadores
+      { slot: 12, count: 1 }  // campeão da Champions
+    ]
+  }
+]
+
+// Eliminatórias CONMEBOL → Copa América (6 melhores + convidadas)
+const ELIMINATORIAS_SLOTS: SeasonPresetSlot[] = [
+  {
+    name: 'Eliminatórias CONMEBOL',
+    format: 'league',
+    config: { homeAndAway: true },
+    teamIds: [
+      'brasil', 'argentina', 'uruguai', 'colombia', 'equador',
+      'chile', 'peru', 'paraguai', 'bolivia', 'venezuela'
+    ]
+  },
+  {
+    name: 'Copa América',
+    format: 'groups',
+    config: { groupCount: 2, qualifiersPerGroup: 2 },
+    teamIds: ['mexico', 'eua'], // convidadas
+    qualifiesFrom: [{ slot: 0, count: 6 }] // 6 melhores das Eliminatórias
+  }
+]
 
 export const SEASON_PRESETS: SeasonPreset[] = [
   // ───────────── Ligas europeias (liga nacional + Champions) ─────────────
@@ -89,6 +164,20 @@ export const SEASON_PRESETS: SeasonPreset[] = [
     group: 'Brasil', period: 10,
     description: 'Brasileirão + Copa do Brasil + Libertadores, todo ano.',
     slots: [fromChamp('brasileirao'), COPA_BRASIL, fromChamp('libertadores')]
+  },
+  // ───────────── América do Sul ─────────────
+  {
+    id: 'sea-sul-americana', label: 'Circuito Sul-Americano', emoji: '🌎', sport: 'football',
+    group: 'América do Sul', period: 10,
+    description:
+      'As 10 ligas nacionais classificam como na realidade: Pré-Libertadores, Libertadores e Intercontinental contra o campeão da Champions.',
+    slots: SUL_AMERICANA_SLOTS
+  },
+  {
+    id: 'sea-eliminatorias', label: 'Eliminatórias & Copa América', emoji: '🏆', sport: 'football',
+    group: 'América do Sul', period: 8,
+    description: 'Eliminatórias CONMEBOL em pontos corridos; os 6 melhores + convidadas jogam a Copa América.',
+    slots: ELIMINATORIAS_SLOTS
   },
   // ───────────── Seleções ─────────────
   {

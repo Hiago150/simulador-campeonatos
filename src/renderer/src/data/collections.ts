@@ -1,4 +1,5 @@
 import type { Sport } from '../types'
+import { CHAMPIONSHIP_PRESETS } from './championships'
 
 // Coleções/presets de times: filtros rápidos na seleção de times do Setup
 // (e do modo Temporada). Cada um seleciona os clubes/times "lógicos".
@@ -9,6 +10,9 @@ export interface Collection {
   group: string
   teamIds: string[]
 }
+
+/** reaproveita a lista de times de um modelo de campeonato — coleção e modelo nunca dessincronizam */
+const fromChamp = (id: string): string[] => CHAMPIONSHIP_PRESETS.find((c) => c.id === id)?.teamIds ?? []
 
 export const COLLECTIONS: Collection[] = [
   // ──────────────── Futebol — Ligas nacionais ────────────────
@@ -22,6 +26,20 @@ export const COLLECTIONS: Collection[] = [
       'internacional', 'gremio', 'botafogo', 'cruzeiro', 'athletico-pr', 'santos', 'vasco',
       'bahia', 'fortaleza', 'bragantino', 'vitoria', 'juventude', 'ceara', 'mirassol'
     ]
+  },
+  {
+    id: 'br-serie-b',
+    label: 'Brasileirão Série B',
+    sport: 'football',
+    group: 'Ligas nacionais',
+    teamIds: fromChamp('brasileirao-b')
+  },
+  {
+    id: 'br-serie-c',
+    label: 'Brasileirão Série C',
+    sport: 'football',
+    group: 'Ligas nacionais',
+    teamIds: ['abc', 'confianca', 'sao-bernardo', 'ypiranga', 'brusque', 'figueirense', 'botafogo-pb', 'tombense']
   },
   {
     id: 'premier',
@@ -78,6 +96,84 @@ export const COLLECTIONS: Collection[] = [
     ]
   },
   {
+    id: 'championship-ing',
+    label: 'Championship (ING)',
+    sport: 'football',
+    group: 'Ligas nacionais',
+    teamIds: fromChamp('championship-ing')
+  },
+  {
+    id: 'bundesliga-2',
+    label: '2. Bundesliga',
+    sport: 'football',
+    group: 'Ligas nacionais',
+    teamIds: fromChamp('bundesliga-2')
+  },
+  // América do Sul — ligas nacionais completas (espelham os modelos)
+  {
+    id: 'liga-argentina',
+    label: 'Primera División (ARG)',
+    sport: 'football',
+    group: 'América do Sul',
+    teamIds: fromChamp('liga-argentina')
+  },
+  {
+    id: 'liga-chilena',
+    label: 'Primera División (CHI)',
+    sport: 'football',
+    group: 'América do Sul',
+    teamIds: fromChamp('liga-chilena')
+  },
+  {
+    id: 'liga-uruguaia',
+    label: 'Primera División (URU)',
+    sport: 'football',
+    group: 'América do Sul',
+    teamIds: fromChamp('liga-uruguaia')
+  },
+  {
+    id: 'liga-paraguaia',
+    label: 'Primera División (PAR)',
+    sport: 'football',
+    group: 'América do Sul',
+    teamIds: fromChamp('liga-paraguaia')
+  },
+  {
+    id: 'liga-colombiana',
+    label: 'Primera A (COL)',
+    sport: 'football',
+    group: 'América do Sul',
+    teamIds: fromChamp('liga-colombiana')
+  },
+  {
+    id: 'liga-equatoriana',
+    label: 'LigaPro (EQU)',
+    sport: 'football',
+    group: 'América do Sul',
+    teamIds: fromChamp('liga-equatoriana')
+  },
+  {
+    id: 'liga-peruana',
+    label: 'Liga 1 (PER)',
+    sport: 'football',
+    group: 'América do Sul',
+    teamIds: fromChamp('liga-peruana')
+  },
+  {
+    id: 'liga-boliviana',
+    label: 'División Profesional (BOL)',
+    sport: 'football',
+    group: 'América do Sul',
+    teamIds: fromChamp('liga-boliviana')
+  },
+  {
+    id: 'liga-venezuelana',
+    label: 'Liga FUTVE (VEN)',
+    sport: 'football',
+    group: 'América do Sul',
+    teamIds: fromChamp('liga-venezuelana')
+  },
+  {
     id: 'liga-mx',
     label: 'Liga MX',
     sport: 'football',
@@ -123,14 +219,10 @@ export const COLLECTIONS: Collection[] = [
   // ──────────────── Futebol — Seleções ────────────────
   {
     id: 'copa-mundo',
-    label: 'Copa do Mundo',
+    label: 'Copa do Mundo 2026',
     sport: 'football',
     group: 'Seleções',
-    teamIds: [
-      'brasil', 'franca', 'argentina', 'espanha', 'inglaterra', 'alemanha', 'portugal', 'holanda',
-      'italia', 'belgica', 'croacia', 'uruguai', 'colombia', 'marrocos', 'mexico', 'eua',
-      'japao', 'senegal', 'suica', 'dinamarca', 'coreia', 'servia', 'equador', 'australia'
-    ]
+    teamIds: fromChamp('copa-mundo')
   },
   {
     id: 'eurocopa',
@@ -147,7 +239,7 @@ export const COLLECTIONS: Collection[] = [
     label: 'Copa América',
     sport: 'football',
     group: 'Seleções',
-    teamIds: ['brasil', 'argentina', 'uruguai', 'colombia', 'equador', 'mexico', 'eua', 'japao']
+    teamIds: fromChamp('copa-america')
   },
   // ──────────────── E-sports ────────────────
   {
@@ -155,10 +247,7 @@ export const COLLECTIONS: Collection[] = [
     label: 'CS2 (elite)',
     sport: 'esports',
     group: 'Counter-Strike 2',
-    teamIds: [
-      'navi', 'vitality', 'faze', 'g2', 'spirit', 'mouz', 'falcons', 'heroic', 'astralis', 'furia',
-      'liquid', 'complexity', 'ence', 'big', 'cloud9', 'eternal-fire', 'gamerlegion', 'apeks'
-    ]
+    teamIds: [...new Set([...fromChamp('cs-major'), 'eternal-fire', 'gamerlegion', 'apeks'])]
   },
   {
     id: 'es-cs-br',
@@ -172,10 +261,7 @@ export const COLLECTIONS: Collection[] = [
     label: 'Valorant (elite)',
     sport: 'esports',
     group: 'Valorant',
-    teamIds: [
-      'sentinels', 'loud', 'paper-rex', 'drx', 'geng', 't1', 'fnatic', 'nrg', 'hundred-thieves',
-      'karmine', 'heretics', 'koi', 'm8', 'leviatan', 'kru', 'edg'
-    ]
+    teamIds: fromChamp('vct-champions')
   },
   {
     id: 'es-val-br',
@@ -183,6 +269,34 @@ export const COLLECTIONS: Collection[] = [
     sport: 'esports',
     group: 'Valorant',
     teamIds: ['loud', 'furia', 'mibr', 'leviatan', 'kru']
+  },
+  {
+    id: 'vct-americas',
+    label: 'VCT Americas',
+    sport: 'esports',
+    group: 'Valorant',
+    teamIds: fromChamp('vct-americas')
+  },
+  {
+    id: 'vct-emea',
+    label: 'VCT EMEA',
+    sport: 'esports',
+    group: 'Valorant',
+    teamIds: fromChamp('vct-emea')
+  },
+  {
+    id: 'vct-pacific',
+    label: 'VCT Pacific',
+    sport: 'esports',
+    group: 'Valorant',
+    teamIds: fromChamp('vct-pacific')
+  },
+  {
+    id: 'vct-china',
+    label: 'VCT China',
+    sport: 'esports',
+    group: 'Valorant',
+    teamIds: fromChamp('vct-china')
   },
   // ──────────────── E-sports — Mistos ────────────────
   {
