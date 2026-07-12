@@ -340,6 +340,8 @@ export interface SeasonYearEntry {
   slotRankings?: Record<string, string[]>
   /** movimentações de acesso/descenso aplicadas ao FIM deste ano (valem pro ano seguinte) */
   movements?: SeasonMovement[]
+  /** campeonato completo de cada slot naquele ano (tabelas/chaveamento/partidas) — permite rever depois */
+  tournaments?: Record<string, Tournament>
   completed: boolean
 }
 

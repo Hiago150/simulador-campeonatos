@@ -336,6 +336,9 @@ export const useSeasons = create<SeasonStore>()(
 
         // classificação final do slot (melhor → pior) — base do acesso/descenso
         const ranking = finalRanking(tournament)
+        // clona o campeonato completo (tabelas/chaveamento/partidas) pra poder ser revisto depois,
+        // desacoplado do objeto ao vivo em useApp.current
+        const tournamentSnapshot: Tournament = JSON.parse(JSON.stringify(tournament))
 
         let years = JSON.parse(JSON.stringify(active.years)) as SeasonYearEntry[]
 
@@ -354,6 +357,7 @@ export const useSeasons = create<SeasonStore>()(
           }
           years[yIdx].records = mergeRecords(years[yIdx].records, slotRecords)
           years[yIdx].slotRankings = { ...(years[yIdx].slotRankings ?? {}), [slot.id]: ranking }
+          years[yIdx].tournaments = { ...(years[yIdx].tournaments ?? {}), [slot.id]: tournamentSnapshot }
         } else {
           years.push({
             year: active.currentYear,
@@ -361,6 +365,7 @@ export const useSeasons = create<SeasonStore>()(
             scorers: [...slotScorers],
             records: mergeRecords(undefined, slotRecords),
             slotRankings: { [slot.id]: ranking },
+            tournaments: { [slot.id]: tournamentSnapshot },
             completed: false
           })
         }

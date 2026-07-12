@@ -88,6 +88,10 @@ interface AppState {
   saveCurrentToLibrary: () => void
   loadFromLibrary: (t: Tournament) => void
 
+  // revisão somente-leitura de um campeonato já concluído (ex.: slot de Temporada)
+  reviewMode: boolean
+  viewTournament: (t: Tournament) => void
+
   exportCurrent: () => Promise<void>
   importFromFile: () => Promise<void>
 }
@@ -114,6 +118,7 @@ export const useApp = create<AppState>()(
       mcDone: 0,
       mcTally: {},
       lastRoundIds: [],
+      reviewMode: false,
 
       go: (screen) => set({ screen }),
       newTournament: (format, sport) =>
@@ -304,7 +309,7 @@ export const useApp = create<AppState>()(
       },
 
       closeTournament: () =>
-        set({ current: null, screen: 'home', mcTarget: 0, mcDone: 0, mcTally: {}, lastRoundIds: [] }),
+        set({ current: null, screen: 'home', mcTarget: 0, mcDone: 0, mcTally: {}, lastRoundIds: [], reviewMode: false }),
 
       saveCurrentToLibrary: () => {
         const cur = get().current
@@ -316,8 +321,15 @@ export const useApp = create<AppState>()(
       loadFromLibrary: (t) => {
         // clona para desacoplar do snapshot persistido na biblioteca
         const clone: Tournament = JSON.parse(JSON.stringify(t))
-        set({ current: clone, screen: 'tournament', mcTarget: 0, mcDone: 0, mcTally: {}, lastRoundIds: [] })
+        set({ current: clone, screen: 'tournament', reviewMode: false, mcTarget: 0, mcDone: 0, mcTally: {}, lastRoundIds: [] })
         get().setToast('Campeonato carregado')
+      },
+
+      viewTournament: (t) => {
+        // revisão somente-leitura (ex.: campeonato já concluído de um ano da Temporada) —
+        // clona pra não expor o snapshot guardado a mutações acidentais
+        const clone: Tournament = JSON.parse(JSON.stringify(t))
+        set({ current: clone, screen: 'tournament', reviewMode: true, mcTarget: 0, mcDone: 0, mcTally: {}, lastRoundIds: [] })
       },
 
       exportCurrent: async () => {

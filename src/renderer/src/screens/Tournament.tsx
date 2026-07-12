@@ -8,6 +8,7 @@ import {
   Crosshair,
   Dices,
   Download,
+  Eye,
   FastForward,
   Goal,
   LayoutGrid,
@@ -80,6 +81,7 @@ export function TournamentScreen() {
   const saveCurrentToLibrary = useApp((s) => s.saveCurrentToLibrary)
   const go = useApp((s) => s.go)
   const closeTournament = useApp((s) => s.closeTournament)
+  const reviewMode = useApp((s) => s.reviewMode)
   const committedIds = useHistory((s) => s.committedIds)
 
   const activeSeason = useSeasons((s) => s.activeSeason)
@@ -137,7 +139,10 @@ export function TournamentScreen() {
 
   const handleClose = () => {
     if (isSeasonTournament) go('season')
-    else closeTournament()
+    else if (reviewMode) {
+      closeTournament()
+      go('season')
+    } else closeTournament()
   }
 
   // Refazer apaga todos os resultados — confirma só se já houver progresso
@@ -183,7 +188,7 @@ export function TournamentScreen() {
           <div className="flex flex-wrap items-center justify-end gap-2">
             <HeaderMenu
               items={[
-                { label: 'Refazer', icon: <RotateCcw size={15} />, onClick: handleReset },
+                ...(reviewMode ? [] : [{ label: 'Refazer', icon: <RotateCcw size={15} />, onClick: handleReset }]),
                 { label: 'Salvar na biblioteca', icon: <Save size={15} />, onClick: saveCurrentToLibrary },
                 { label: 'Exportar', icon: <Download size={15} />, onClick: exportCurrent }
               ]}
@@ -213,7 +218,12 @@ export function TournamentScreen() {
                 <CalendarDays size={11} /> Temporada — campeonato {(activeSeason?.currentSlotIndex ?? 0) + 1}/{activeSeason?.slots.length}
               </span>
             )}
-            {finished && !concluded && (
+            {reviewMode && (
+              <span className="tag border-amber-700/40 text-amber-300">
+                <Eye size={11} /> Revisão — resultado já registrado
+              </span>
+            )}
+            {finished && !concluded && !reviewMode && (
               <Button
                 variant="primary"
                 icon={<Check size={16} />}

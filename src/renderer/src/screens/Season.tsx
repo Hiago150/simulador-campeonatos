@@ -6,9 +6,12 @@ import {
   ChevronRight,
   Crosshair,
   Crown,
+  Eye,
+  FastForward,
   Flag,
   Flame,
   Layers,
+  Loader2,
   Medal,
   Play,
   Plus,
@@ -43,6 +46,7 @@ import { collectionsForSport, collectionsGrouped } from '../data/collections'
 import { seasonPresetsGrouped, type SeasonPreset } from '../data/season-presets'
 import { FORMAT_META, GAME_META, SPORT_META, FORMATS, ESPORTS_GAMES } from '../lib/meta'
 import { Button, Segmented, Stepper, Toggle } from '../components/ui'
+import { createTournament, simulateAll } from '../engine/tournament'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { TeamBadge } from '../components/TeamBadge'
 import { cx } from '../lib/cx'
@@ -69,7 +73,14 @@ export function SeasonScreen() {
 
   if (view === 'wizard') return <SeasonWizard onBack={() => setView('list')} onDone={(s) => goToSeason(s)} />
   if (view === 'hub')
-    return <SeasonHub onLeave={() => setView('list')} onHall={() => setView('hall')} onForm={() => setView('form')} />
+    return (
+      <SeasonHub
+        onLeave={() => setView('list')}
+        onHall={() => setView('hall')}
+        onForm={() => setView('form')}
+        onAdvance={(s) => goToSeason(s)}
+      />
+    )
   if (view === 'summary')
     return <SeasonYearSummary onNext={() => setView('hub')} onLeave={() => setView('list')} onHall={() => setView('hall')} />
   if (view === 'finale')
@@ -1351,19 +1362,24 @@ function BoundariesEditor({
 function SeasonHub({
   onLeave,
   onHall,
-  onForm
+  onForm,
+  onAdvance
 }: {
   onLeave: () => void
   onHall: () => void
   onForm: () => void
+  onAdvance: (s: Season) => void
 }) {
   const activeSeason = useSeasons((s) => s.activeSeason)
   const abandonSeason = useSeasons((s) => s.abandonSeason)
   const setPendingTournamentId = useSeasons((s) => s.setPendingTournamentId)
+  const recordSlotResult = useSeasons((s) => s.recordSlotResult)
   const startTournament = useApp((s) => s.startTournament)
+  const viewTournament = useApp((s) => s.viewTournament)
 
   const [statsTab, setStatsTab] = useState<'year' | 'alltime'>('year')
   const [confirmLeave, setConfirmLeave] = useState(false)
+  const [bulkSimulating, setBulkSimulating] = useState(false)
 
   if (!activeSeason) return null
 
@@ -1408,6 +1424,41 @@ function SeasonHub({
     setPendingTournamentId(id)
   }
 
+  // Simula automaticamente todos os campeonatos restantes DESTE ano (sem passar
+  // pela tela de torneio) — cada um fica gravado com o campeonato completo
+  // (tabelas/chaveamento/partidas) pra poder ser revisto depois em detalhe.
+  const handleSimulateAllRemaining = () => {
+    if (bulkSimulating || !currentSlot) return
+    setBulkSimulating(true)
+    const rosterOverrides = useApp.getState().rosterOverrides
+    // adia um tick pra "Simulando…" pintar antes do trabalho síncrono pesado
+    setTimeout(() => {
+      let active = useSeasons.getState().activeSeason
+      let guard = 0
+      while (active && active.status === 'playing' && active.id === s.id && guard < 100) {
+        const slot = active.slots[active.currentSlotIndex]
+        if (!slot) break
+        const thisYearNow = active.years.find((y) => y.year === active.currentYear)
+        const allIds = resolveSlotTeamIds(slot, thisYearNow?.slotRankings)
+        const slotTeams: Team[] = allIds.length ? active.teamPool.filter((t) => allIds.includes(t.id)) : active.teamPool
+        const built = createTournament({
+          name: slot.name,
+          sport: active.sport,
+          format: slot.format,
+          teams: slotTeams,
+          config: { ...slot.config, game: active.game ?? slot.config.game },
+          rosterOverrides
+        })
+        const played = simulateAll(built)
+        recordSlotResult(played)
+        active = useSeasons.getState().activeSeason
+        guard++
+      }
+      setBulkSimulating(false)
+      if (active) onAdvance(active)
+    }, 30)
+  }
+
   const handleAbandon = () => {
     abandonSeason()
     onLeave()
@@ -1415,7 +1466,7 @@ function SeasonHub({
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-3xl px-4 py-8 md:px-8">
+      <div className="mx-auto max-w-6xl px-4 py-8 md:px-8">
         {/* Header */}
         <div className="mb-6">
           <div className="mb-1 flex items-center justify-between">
@@ -1440,184 +1491,212 @@ function SeasonHub({
             <span className="tag">{sport.emoji} {sport.label}</span>
             {game && <span className="tag">{game.emoji} {game.short}</span>}
             <span className="tag text-blood-300 border-blood-700/40">Ano {s.currentYear} de {s.period}</span>
+            <span className="tag">{s.teamPool.length} times no pool</span>
           </div>
         </div>
 
-        {/* Slot progress */}
-        <div className="panel mb-5 p-4">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-            Sequência do ano — {s.currentSlotIndex}/{s.slots.length} concluídos
-          </p>
-          <div className="flex flex-col gap-1.5">
-            {s.slots.map((slot, i) => {
-              const done = i < s.currentSlotIndex
-              const current = i === s.currentSlotIndex
-              const Icon = FORMAT_META[slot.format].icon
-              const champion = yearChampions.find((c) => c.slotId === slot.id)
-              return (
-                <div
-                  key={slot.id}
-                  className={cx(
-                    'flex items-center gap-3 rounded-xl px-3 py-2 transition',
-                    current ? 'bg-blood-950/30 border border-blood-600/30' : done ? 'bg-ink-800/60' : 'bg-ink-800/30'
-                  )}
-                >
-                  <span className={cx('tnum w-4 text-right text-xs font-bold', current ? 'text-blood-400' : done ? 'text-zinc-400' : 'text-zinc-600')}>
-                    {i + 1}
-                  </span>
-                  <Icon size={13} className={cx('shrink-0', current ? 'text-blood-400' : done ? 'text-zinc-400' : 'text-zinc-600')} />
-                  <span className={cx('flex-1 text-sm', current ? 'font-semibold text-zinc-100' : done ? 'text-zinc-400' : 'text-zinc-600')}>
-                    {slot.name}
-                  </span>
-                  {done && champion && (
-                    <div className="flex items-center gap-1.5">
-                      <Trophy size={12} className="text-amber-400" />
-                      <span className="text-xs font-medium text-zinc-300">{champion.teamName}</span>
+        <div className="grid items-start gap-5 lg:grid-cols-[1.6fr_1fr]">
+          {/* Slot progress */}
+          <div className="panel p-4">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              Sequência do ano — {s.currentSlotIndex}/{s.slots.length} concluídos
+            </p>
+            <div className="grid gap-1.5 sm:grid-cols-2">
+              {s.slots.map((slot, i) => {
+                const done = i < s.currentSlotIndex
+                const current = i === s.currentSlotIndex
+                const Icon = FORMAT_META[slot.format].icon
+                const champion = yearChampions.find((c) => c.slotId === slot.id)
+                const champTeam = champion ? poolMap[champion.teamId] : undefined
+                return (
+                  <div
+                    key={slot.id}
+                    className={cx(
+                      'flex flex-col gap-2 rounded-xl px-3 py-2.5 transition',
+                      current ? 'bg-blood-950/30 border border-blood-600/30' : done ? 'bg-ink-800/60' : 'bg-ink-800/30'
+                    )}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <span className={cx('tnum w-4 text-right text-xs font-bold', current ? 'text-blood-400' : done ? 'text-zinc-400' : 'text-zinc-600')}>
+                        {i + 1}
+                      </span>
+                      <Icon size={13} className={cx('shrink-0', current ? 'text-blood-400' : done ? 'text-zinc-400' : 'text-zinc-600')} />
+                      <span className={cx('flex-1 truncate text-sm', current ? 'font-semibold text-zinc-100' : done ? 'text-zinc-400' : 'text-zinc-600')}>
+                        {slot.name}
+                      </span>
+                      {current && (
+                        <span className="tag border-blood-700/40 text-blood-300 text-[10px] shrink-0">Próximo</span>
+                      )}
+                      {i > s.currentSlotIndex && (
+                        <span className="shrink-0 text-[10px] text-zinc-600">Aguardando</span>
+                      )}
                     </div>
-                  )}
-                  {current && (
-                    <span className="tag border-blood-700/40 text-blood-300 text-[10px]">Próximo</span>
-                  )}
-                  {i > s.currentSlotIndex && (
-                    <span className="text-[10px] text-zinc-600">Aguardando</span>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-
-          <div className="mt-4">
-            <Button variant="primary" icon={<Play size={14} />} onClick={handleStart}>
-              Iniciar: {currentSlot?.name ?? '—'}
-            </Button>
-          </div>
-        </div>
-
-        {/* Evolução: atalho para a tela de Forma da temporada */}
-        {hasForm && (
-          <button
-            onClick={onForm}
-            className="panel mb-5 flex w-full items-center gap-3 p-4 text-left transition hover:border-blood-600/40"
-          >
-            <TrendingUp size={18} className="shrink-0 text-blood-400" />
-            <div className="flex-1">
-              <p className="text-sm font-bold text-zinc-100">Forma da temporada — Ano {s.currentYear}</p>
-              <p className="text-[11px] text-zinc-500">
-                Veja todos os times em alta e em baixa neste ano.
-              </p>
+                    {done && champion && (
+                      <div className="flex items-center gap-1.5 pl-6">
+                        {champTeam ? <TeamBadge team={champTeam} size="xs" /> : <Trophy size={12} className="text-amber-400" />}
+                        <span className="min-w-0 flex-1 truncate text-xs font-medium text-zinc-300">{champion.teamName}</span>
+                        {thisYear?.tournaments?.[slot.id] && (
+                          <button
+                            onClick={() => viewTournament(thisYear.tournaments![slot.id])}
+                            title="Ver detalhes do campeonato"
+                            className="flex shrink-0 items-center gap-1 rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-semibold text-zinc-400 transition hover:border-blood-600/40 hover:text-blood-300"
+                          >
+                            <Eye size={11} /> Detalhes
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
-            <ChevronRight size={18} className="text-zinc-600" />
-          </button>
-        )}
 
-        {/* Stats tabs */}
-        <div className="panel p-4">
-          <div className="mb-4 flex gap-2">
-            {([['year', `Ano ${s.currentYear}`], ['alltime', 'Geral']] as const).map(([tab, label]) => (
-              <button
-                key={tab}
-                onClick={() => setStatsTab(tab)}
-                className={cx(
-                  'rounded-xl px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition',
-                  statsTab === tab ? 'bg-blood-950/50 text-blood-300' : 'text-zinc-500 hover:text-zinc-200'
-                )}
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button variant="primary" icon={<Play size={14} />} onClick={handleStart} disabled={bulkSimulating}>
+                Iniciar: {currentSlot?.name ?? '—'}
+              </Button>
+              <Button
+                icon={bulkSimulating ? <Loader2 size={14} className="animate-spin" /> : <FastForward size={14} />}
+                onClick={handleSimulateAllRemaining}
+                disabled={bulkSimulating}
               >
-                {label}
-              </button>
-            ))}
+                {bulkSimulating ? 'Simulando…' : 'Simular todos os campeonatos'}
+              </Button>
+            </div>
+            <p className="mt-2 text-[11px] leading-snug text-zinc-600">
+              Roda o restante da sequência deste ano de uma vez, sem passar pela tela de cada campeonato. Cada resultado fica salvo e pode ser revisto em detalhe depois.
+            </p>
           </div>
 
-          {statsTab === 'year' && (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                  <Trophy size={11} className="mr-1 inline text-amber-400" /> Campeões do ano
-                </p>
-                {yearChampions.length === 0 ? (
-                  <p className="text-xs text-zinc-600">Nenhum campeonato concluído ainda.</p>
-                ) : (
-                  yearChampions.map((c) => (
-                    <div key={c.slotId} className="mb-2 flex items-center gap-2">
-                      {poolMap[c.teamId] && <TeamBadge team={poolMap[c.teamId]} size="sm" />}
-                      <div>
-                        <p className="text-xs font-semibold text-zinc-200">{c.teamName}</p>
-                        <p className="text-[11px] text-zinc-500">{c.slotName}</p>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                  <Medal size={11} className="mr-1 inline text-blood-400" />
-                  {s.sport === 'esports' ? 'Maiores abatedores' : 'Artilheiros'} — Ano {s.currentYear}
-                </p>
-                {yearScorers.length === 0 ? (
-                  <p className="text-xs text-zinc-600">Sem dados ainda.</p>
-                ) : (
-                  yearScorers.slice(0, 5).map((sc, i) => (
-                    <div key={sc.playerId} className="mb-1.5 flex items-center gap-2">
-                      <span className="tnum w-4 text-right text-[11px] text-zinc-600">{i + 1}</span>
-                      <div className="flex-1">
-                        <span className="text-xs font-semibold text-zinc-200">{sc.name}</span>
-                        <span className="ml-1 text-[11px] text-zinc-500">— {sc.teamName}</span>
-                      </div>
-                      <span className="tnum text-xs font-bold text-blood-300">
-                        {s.sport === 'esports' ? sc.kills : sc.goals}
-                      </span>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
+          {/* Sidebar: forma + estatísticas */}
+          <div className="flex flex-col gap-5">
+            {/* Evolução: atalho para a tela de Forma da temporada */}
+            {hasForm && (
+              <button
+                onClick={onForm}
+                className="panel flex w-full items-center gap-3 p-4 text-left transition hover:border-blood-600/40"
+              >
+                <TrendingUp size={18} className="shrink-0 text-blood-400" />
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-zinc-100">Forma da temporada — Ano {s.currentYear}</p>
+                  <p className="text-[11px] text-zinc-500">
+                    Veja todos os times em alta e em baixa neste ano.
+                  </p>
+                </div>
+                <ChevronRight size={18} className="shrink-0 text-zinc-600" />
+              </button>
+            )}
 
-          {statsTab === 'alltime' && (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                  <Trophy size={11} className="mr-1 inline text-amber-400" /> Maiores campeões
-                </p>
-                {allTimeWins.length === 0 ? (
-                  <p className="text-xs text-zinc-600">Nenhum título ainda.</p>
-                ) : (
-                  allTimeWins.map(([teamId, wins], i) => {
-                    const team = poolMap[teamId]
-                    return (
-                      <div key={teamId} className="mb-2 flex items-center gap-2">
-                        <span className="tnum w-4 text-right text-[11px] text-zinc-600">{i + 1}</span>
-                        {team && <TeamBadge team={team} size="sm" />}
-                        <span className="flex-1 text-xs font-semibold text-zinc-200">{team?.name ?? teamId}</span>
-                        <span className="tnum text-xs font-bold text-amber-400">{wins}×</span>
-                      </div>
-                    )
-                  })
-                )}
+            {/* Stats tabs */}
+            <div className="panel p-4">
+              <div className="mb-4 flex gap-2">
+                {([['year', `Ano ${s.currentYear}`], ['alltime', 'Geral']] as const).map(([tab, label]) => (
+                  <button
+                    key={tab}
+                    onClick={() => setStatsTab(tab)}
+                    className={cx(
+                      'rounded-xl px-3 py-1.5 text-xs font-semibold uppercase tracking-wide transition',
+                      statsTab === tab ? 'bg-blood-950/50 text-blood-300' : 'text-zinc-500 hover:text-zinc-200'
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                  <Medal size={11} className="mr-1 inline text-blood-400" />
-                  {s.sport === 'esports' ? 'Abates' : 'Gols'} — All-time
-                </p>
-                {allTimeScorers.length === 0 ? (
-                  <p className="text-xs text-zinc-600">Sem dados ainda.</p>
-                ) : (
-                  allTimeScorers.slice(0, 5).map((sc, i) => (
-                    <div key={sc.playerId} className="mb-1.5 flex items-center gap-2">
-                      <span className="tnum w-4 text-right text-[11px] text-zinc-600">{i + 1}</span>
-                      <div className="flex-1">
-                        <span className="text-xs font-semibold text-zinc-200">{sc.name}</span>
-                        <span className="ml-1 text-[11px] text-zinc-500">— {sc.teamName}</span>
-                      </div>
-                      <span className="tnum text-xs font-bold text-blood-300">
-                        {s.sport === 'esports' ? sc.kills : sc.goals}
-                      </span>
-                    </div>
-                  ))
-                )}
-              </div>
+
+              {statsTab === 'year' && (
+                <div className="flex flex-col gap-5">
+                  <div>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                      <Trophy size={11} className="mr-1 inline text-amber-400" /> Campeões do ano
+                    </p>
+                    {yearChampions.length === 0 ? (
+                      <p className="text-xs text-zinc-600">Nenhum campeonato concluído ainda.</p>
+                    ) : (
+                      yearChampions.map((c) => (
+                        <div key={c.slotId} className="mb-2 flex items-center gap-2">
+                          {poolMap[c.teamId] && <TeamBadge team={poolMap[c.teamId]} size="sm" />}
+                          <div>
+                            <p className="text-xs font-semibold text-zinc-200">{c.teamName}</p>
+                            <p className="text-[11px] text-zinc-500">{c.slotName}</p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <div>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                      <Medal size={11} className="mr-1 inline text-blood-400" />
+                      {s.sport === 'esports' ? 'Maiores abatedores' : 'Artilheiros'} — Ano {s.currentYear}
+                    </p>
+                    {yearScorers.length === 0 ? (
+                      <p className="text-xs text-zinc-600">Sem dados ainda.</p>
+                    ) : (
+                      yearScorers.slice(0, 5).map((sc, i) => (
+                        <div key={sc.playerId} className="mb-1.5 flex items-center gap-2">
+                          <span className="tnum w-4 text-right text-[11px] text-zinc-600">{i + 1}</span>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-xs font-semibold text-zinc-200">{sc.name}</span>
+                            <span className="ml-1 text-[11px] text-zinc-500">— {sc.teamName}</span>
+                          </div>
+                          <span className="tnum shrink-0 text-xs font-bold text-blood-300">
+                            {s.sport === 'esports' ? sc.kills : sc.goals}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {statsTab === 'alltime' && (
+                <div className="flex flex-col gap-5">
+                  <div>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                      <Trophy size={11} className="mr-1 inline text-amber-400" /> Maiores campeões
+                    </p>
+                    {allTimeWins.length === 0 ? (
+                      <p className="text-xs text-zinc-600">Nenhum título ainda.</p>
+                    ) : (
+                      allTimeWins.map(([teamId, wins], i) => {
+                        const team = poolMap[teamId]
+                        return (
+                          <div key={teamId} className="mb-2 flex items-center gap-2">
+                            <span className="tnum w-4 text-right text-[11px] text-zinc-600">{i + 1}</span>
+                            {team && <TeamBadge team={team} size="sm" />}
+                            <span className="min-w-0 flex-1 truncate text-xs font-semibold text-zinc-200">{team?.name ?? teamId}</span>
+                            <span className="tnum shrink-0 text-xs font-bold text-amber-400">{wins}×</span>
+                          </div>
+                        )
+                      })
+                    )}
+                  </div>
+                  <div>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                      <Medal size={11} className="mr-1 inline text-blood-400" />
+                      {s.sport === 'esports' ? 'Abates' : 'Gols'} — All-time
+                    </p>
+                    {allTimeScorers.length === 0 ? (
+                      <p className="text-xs text-zinc-600">Sem dados ainda.</p>
+                    ) : (
+                      allTimeScorers.slice(0, 5).map((sc, i) => (
+                        <div key={sc.playerId} className="mb-1.5 flex items-center gap-2">
+                          <span className="tnum w-4 text-right text-[11px] text-zinc-600">{i + 1}</span>
+                          <div className="min-w-0 flex-1">
+                            <span className="text-xs font-semibold text-zinc-200">{sc.name}</span>
+                            <span className="ml-1 text-[11px] text-zinc-500">— {sc.teamName}</span>
+                          </div>
+                          <span className="tnum shrink-0 text-xs font-bold text-blood-300">
+                            {s.sport === 'esports' ? sc.kills : sc.goals}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       </div>
 
@@ -1651,6 +1730,7 @@ function SeasonYearSummary({
   const startNextYear = useSeasons((s) => s.startNextYear)
   const abandonSeason = useSeasons((s) => s.abandonSeason)
   const historyData = useHistory((s) => s.data)
+  const viewTournament = useApp((s) => s.viewTournament)
 
   if (!activeSeason) return null
   const s = activeSeason
@@ -1732,13 +1812,23 @@ function SeasonYearSummary({
             <div className="grid gap-3 sm:grid-cols-2">
               {(yearEntry?.champions ?? []).map((c) => {
                 const team = poolMap[c.teamId]
+                const tournament = yearEntry?.tournaments?.[c.slotId]
                 return (
                   <div key={c.slotId} className="flex items-center gap-3 rounded-xl bg-ink-800/60 px-3 py-3">
                     {team && <TeamBadge team={team} size="sm" />}
-                    <div>
-                      <p className="text-sm font-bold text-zinc-100">{c.teamName}</p>
-                      <p className="text-[11px] text-zinc-500">{c.slotName}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-bold text-zinc-100">{c.teamName}</p>
+                      <p className="truncate text-[11px] text-zinc-500">{c.slotName}</p>
                     </div>
+                    {tournament && (
+                      <button
+                        onClick={() => viewTournament(tournament)}
+                        title="Ver detalhes do campeonato"
+                        className="flex shrink-0 items-center gap-1 rounded-full border border-white/10 px-2 py-1 text-[10px] font-semibold text-zinc-400 transition hover:border-blood-600/40 hover:text-blood-300"
+                      >
+                        <Eye size={11} /> Detalhes
+                      </button>
+                    )}
                   </div>
                 )
               })}
@@ -2448,6 +2538,7 @@ function SeasonFormScreen({ onBack }: { onBack: () => void }) {
 
 function SeasonYearDetail({ year, onBack }: { year: number; onBack: () => void }) {
   const activeSeason = useSeasons((s) => s.activeSeason)
+  const viewTournament = useApp((s) => s.viewTournament)
 
   if (!activeSeason) return null
   const s = activeSeason
@@ -2508,14 +2599,28 @@ function SeasonYearDetail({ year, onBack }: { year: number; onBack: () => void }
                 <p className="text-sm text-zinc-600">Nenhum campeonato concluído neste ano.</p>
               ) : (
                 <div className="space-y-2.5">
-                  {entry.champions.map((c) => (
-                    <div key={c.slotId} className="flex items-center gap-3 rounded-xl bg-ink-800/50 px-3 py-2.5">
-                      <Trophy size={14} className="shrink-0 text-amber-400" />
-                      <TeamBadge team={poolMap[c.teamId]} size="sm" />
-                      <span className="flex-1 truncate text-sm font-bold text-zinc-100">{c.teamName}</span>
-                      <span className="truncate text-xs text-zinc-500">{c.slotName}</span>
-                    </div>
-                  ))}
+                  {entry.champions.map((c) => {
+                    const tournament = entry.tournaments?.[c.slotId]
+                    return (
+                      <div key={c.slotId} className="flex items-center gap-3 rounded-xl bg-ink-800/50 px-3 py-2.5">
+                        <Trophy size={14} className="shrink-0 text-amber-400" />
+                        <TeamBadge team={poolMap[c.teamId]} size="sm" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-bold text-zinc-100">{c.teamName}</p>
+                          <p className="truncate text-xs text-zinc-500">{c.slotName}</p>
+                        </div>
+                        {tournament && (
+                          <button
+                            onClick={() => viewTournament(tournament)}
+                            title="Ver detalhes do campeonato"
+                            className="flex shrink-0 items-center gap-1 rounded-full border border-white/10 px-2 py-1 text-[10px] font-semibold text-zinc-400 transition hover:border-blood-600/40 hover:text-blood-300"
+                          >
+                            <Eye size={11} /> Detalhes
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </div>
