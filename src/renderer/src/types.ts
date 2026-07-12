@@ -312,6 +312,13 @@ export interface SeasonSlot {
    * ausente, usa o pool global da temporada (criação manual).
    */
   teamIds?: string[]
+  /**
+   * Classificação dinâmica: SOMA aos `teamIds` fixos os colocados de outro(s)
+   * slot(s) JÁ CONCLUÍDOS no mesmo ano (ex.: "Intercontinental" = campeão da
+   * Libertadores + campeão da Champions). `offset` (0-based) permite faixas
+   * fora do topo (ex.: offset 6, count 2 = 7º e 8º, vaga de Pré-Libertadores).
+   */
+  qualifiesFrom?: { slotId: string; count: number; offset?: number }[]
 }
 
 export interface SeasonScorerEntry {
@@ -329,7 +336,33 @@ export interface SeasonYearEntry {
   scorers: SeasonScorerEntry[]
   /** recordes daquele ano (isolado) — mesma estrutura do all-time */
   records?: SeasonRecords
+  /** classificação final (melhor → pior) de cada slot naquele ano — base do acesso/descenso */
+  slotRankings?: Record<string, string[]>
+  /** movimentações de acesso/descenso aplicadas ao FIM deste ano (valem pro ano seguinte) */
+  movements?: SeasonMovement[]
   completed: boolean
+}
+
+/** um time trocando de divisão ao fim do ano */
+export interface SeasonMovement {
+  teamId: string
+  teamName: string
+  fromSlotId: string
+  fromSlotName: string
+  toSlotId: string
+  toSlotName: string
+  kind: 'promotion' | 'relegation'
+}
+
+/**
+ * Fronteira entre duas divisões interligadas: ao fim de cada ano, os últimos
+ * `count` colocados do slot superior trocam de lugar com os primeiros `count`
+ * do slot inferior (sobe = desce, tamanhos estáveis).
+ */
+export interface DivisionBoundary {
+  upperSlotId: string
+  lowerSlotId: string
+  count: number
 }
 
 /** força base de um time (captada na criação) — usada na evolução entre anos */
@@ -386,6 +419,8 @@ export interface Season {
   game?: EsportsGame
   period: number
   slots: SeasonSlot[]
+  /** divisões interligadas por acesso/descenso (opcional) */
+  divisionBoundaries?: DivisionBoundary[]
   teamPool: Team[]
   currentYear: number
   currentSlotIndex: number

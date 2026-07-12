@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import type {
   BestOf,
+  DivisionBoundary,
   EsportsGame,
   Format,
   Season,
@@ -35,7 +36,7 @@ import type {
   TournamentConfig
 } from '../types'
 import { useApp } from '../store/app'
-import { useSeasons } from '../store/season'
+import { useSeasons, resolveSlotTeamIds } from '../store/season'
 import { useHistory } from '../store/history'
 import { presetsForSport } from '../data/teams'
 import { collectionsForSport, collectionsGrouped } from '../data/collections'
@@ -334,6 +335,7 @@ function SeasonWizard({ onBack, onDone }: { onBack: () => void; onDone: (s: Seas
   const [poolIds, setPoolIds] = useState<string[]>([])
   const [search, setSearch] = useState('')
   const [slots, setSlots] = useState<SeasonSlot[]>([])
+  const [boundaries, setBoundaries] = useState<DivisionBoundary[]>([])
   const [catFilter, setCatFilter] = useState<TeamCategory | 'all'>('all')
   const [collectionId, setCollectionId] = useState<string | null>(null)
   const [collectionsOpen, setCollectionsOpen] = useState(false)
@@ -378,6 +380,7 @@ function SeasonWizard({ onBack, onDone }: { onBack: () => void; onDone: (s: Seas
     setSport(sp)
     setPoolIds([])
     setSlots([])
+    setBoundaries([])
     setCatFilter('all')
     setCollectionId(null)
     setPresetApplied(false)
@@ -391,11 +394,18 @@ function SeasonWizard({ onBack, onDone }: { onBack: () => void; onDone: (s: Seas
     setCatFilter('all')
     setCollectionId(null)
     setSearch('')
-    const built: SeasonSlot[] = p.slots.map((sl) => ({
-      id: uid('slot'),
+    // ids nascem antes pra que qualifiesFrom (índice no preset) vire slotId real
+    const slotIds = p.slots.map(() => uid('slot'))
+    const built: SeasonSlot[] = p.slots.map((sl, i) => ({
+      id: slotIds[i],
       name: sl.name,
       format: sl.format,
-      teamIds: sl.teamIds,
+      teamIds: sl.teamIds.length > 0 ? sl.teamIds : undefined,
+      qualifiesFrom: sl.qualifiesFrom?.map((q) => ({
+        slotId: slotIds[q.slot],
+        count: q.count,
+        offset: q.offset
+      })),
       config: {
         ...defaultConfig(p.sport, p.game),
         ...sl.config,
@@ -429,7 +439,24 @@ function SeasonWizard({ onBack, onDone }: { onBack: () => void; onDone: (s: Seas
   const updateSlot = (idx: number, patch: Partial<SeasonSlot>) =>
     setSlots((prev) => prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)))
 
-  const removeSlot = (idx: number) => setSlots((prev) => prev.filter((_, i) => i !== idx))
+  const removeSlot = (idx: number) => {
+    const removed = slots[idx]
+    setSlots((prev) => prev.filter((_, i) => i !== idx))
+    // remove ligações que apontavam pro slot excluído
+    if (removed) setBoundaries((prev) => prev.filter((b) => b.upperSlotId !== removed.id && b.lowerSlotId !== removed.id))
+  }
+
+  // ligações válidas: slots existem, são diferentes e ambos têm elenco próprio
+  const validBoundaries = useMemo(
+    () =>
+      boundaries.filter((b) => {
+        if (b.upperSlotId === b.lowerSlotId || b.count < 1) return false
+        const upper = slots.find((s) => s.id === b.upperSlotId)
+        const lower = slots.find((s) => s.id === b.lowerSlotId)
+        return !!upper?.teamIds?.length && !!lower?.teamIds?.length
+      }),
+    [boundaries, slots]
+  )
 
   const stepIdx = STEPS.indexOf(step)
 
@@ -456,6 +483,7 @@ function SeasonWizard({ onBack, onDone }: { onBack: () => void; onDone: (s: Seas
       game: sport === 'esports' ? game : undefined,
       period,
       slots,
+      divisionBoundaries: validBoundaries.length ? validBoundaries : undefined,
       teamPool: selectedTeams
     })
     onDone(s)
@@ -773,6 +801,8 @@ function SeasonWizard({ onBack, onDone }: { onBack: () => void; onDone: (s: Seas
                 index={idx}
                 sport={sport}
                 game={sport === 'esports' ? game : undefined}
+                poolTeams={selectedTeams}
+                earlierSlots={slots.slice(0, idx)}
                 onChange={(patch) => updateSlot(idx, patch)}
                 onDelete={() => removeSlot(idx)}
               />
@@ -789,6 +819,11 @@ function SeasonWizard({ onBack, onDone }: { onBack: () => void; onDone: (s: Seas
               <p className="text-center text-sm text-zinc-600">
                 Adicione pelo menos um campeonato para definir a sequência anual.
               </p>
+            )}
+
+            {/* Divisões interligadas (acesso/descenso) */}
+            {slots.length >= 2 && (
+              <BoundariesEditor slots={slots} boundaries={boundaries} onChange={setBoundaries} />
             )}
           </div>
         )}
@@ -825,6 +860,31 @@ function SeasonWizard({ onBack, onDone }: { onBack: () => void; onDone: (s: Seas
                 )
               })}
             </div>
+            {validBoundaries.length > 0 && (
+              <>
+                <div className="rule my-4" />
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                  Divisões interligadas
+                </p>
+                <div className="flex flex-col gap-2">
+                  {validBoundaries.map((b, i) => {
+                    const upper = slots.find((s) => s.id === b.upperSlotId)
+                    const lower = slots.find((s) => s.id === b.lowerSlotId)
+                    return (
+                      <div key={i} className="flex items-center gap-2 rounded-xl bg-ink-800/60 px-3 py-2.5 text-sm">
+                        <TrendingDown size={14} className="shrink-0 text-blood-400" />
+                        <span className="text-zinc-300">
+                          Os últimos <strong className="text-white">{b.count}</strong> de{' '}
+                          <strong className="text-white">{upper?.name}</strong> trocam com os primeiros{' '}
+                          <strong className="text-white">{b.count}</strong> de{' '}
+                          <strong className="text-white">{lower?.name}</strong> ao fim de cada ano.
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
             <p className="mt-4 text-xs text-zinc-600">
               {slots.some((s) => s.teamIds && s.teamIds.length > 0)
                 ? `Cada campeonato tem seu próprio elenco; os ${poolIds.length} times do pool são acompanhados por ${period} anos (artilharia e títulos somam todos os campeonatos).`
@@ -860,6 +920,8 @@ function SlotEditor({
   index,
   sport,
   game,
+  poolTeams,
+  earlierSlots,
   onChange,
   onDelete
 }: {
@@ -867,13 +929,40 @@ function SlotEditor({
   index: number
   sport: Sport
   game?: EsportsGame
+  /** pool da temporada — origem do elenco próprio do slot */
+  poolTeams: Team[]
+  /** campeonatos anteriores na sequência do ano — únicas fontes válidas de classificação dinâmica */
+  earlierSlots: SeasonSlot[]
   onChange: (patch: Partial<SeasonSlot>) => void
   onDelete: () => void
 }) {
   const [expanded, setExpanded] = useState(index === 0)
+  const [teamsOpen, setTeamsOpen] = useState(false)
+  const [teamSearch, setTeamSearch] = useState('')
 
   const updateConfig = (patch: Partial<TournamentConfig>) =>
     onChange({ config: { ...slot.config, ...patch } })
+
+  const slotTeamIds = slot.teamIds ?? []
+  const toggleSlotTeam = (id: string) =>
+    onChange({
+      teamIds: slotTeamIds.includes(id) ? slotTeamIds.filter((x) => x !== id) : [...slotTeamIds, id]
+    })
+  const filteredPool = poolTeams.filter(
+    (t) => !teamSearch || t.name.toLowerCase().includes(teamSearch.toLowerCase())
+  )
+
+  // classificação dinâmica: times deste slot vêm dos melhores de campeonato(s) anterior(es)
+  const qualifiers = slot.qualifiesFrom ?? []
+  const eligibleSources = earlierSlots.filter((s) => (s.teamIds && s.teamIds.length) || s.qualifiesFrom?.length)
+  const updateQualifiers = (next: { slotId: string; count: number }[]) =>
+    onChange({ qualifiesFrom: next.length ? next : undefined })
+  const addQualifier = () => {
+    const used = new Set(qualifiers.map((q) => q.slotId))
+    const next = eligibleSources.find((s) => !used.has(s.id))
+    if (!next) return
+    updateQualifiers([...qualifiers, { slotId: next.id, count: 1 }])
+  }
 
   return (
     <div className="panel overflow-hidden">
@@ -938,6 +1027,146 @@ function SlotEditor({
             </div>
           </div>
 
+          {/* Classificação dinâmica: times vêm do resultado de campeonato(s) anterior(es) do mesmo ano */}
+          {eligibleSources.length > 0 && (
+            <div className="mb-3 rounded-xl border border-white/5 bg-ink-850/60 p-3">
+              <p className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
+                <TrendingUp size={13} className="text-blood-400" /> Classificação de outro campeonato
+              </p>
+              {qualifiers.length === 0 ? (
+                <p className="mb-2 text-[11px] leading-snug text-zinc-600">
+                  Além do elenco fixo, este campeonato pode receber automaticamente colocados de outro(s)
+                  já disputados no mesmo ano (ex.: uma Libertadores com clubes fixos + quem subir do
+                  Pré, ou uma Intercontinental com o campeão da Libertadores + o campeão da Champions).
+                </p>
+              ) : (
+                <div className="mb-2 flex flex-col gap-2">
+                  {qualifiers.map((q, qi) => (
+                    <div key={q.slotId} className="flex flex-wrap items-center gap-2">
+                      <select
+                        className="input w-auto min-w-0 flex-1 py-1.5 text-xs"
+                        value={q.slotId}
+                        onChange={(e) => {
+                          const next = [...qualifiers]
+                          next[qi] = { ...q, slotId: e.target.value }
+                          updateQualifiers(next)
+                        }}
+                      >
+                        {eligibleSources.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="shrink-0 text-xs text-zinc-400">a partir do</span>
+                      <Stepper
+                        value={(q.offset ?? 0) + 1}
+                        min={1}
+                        max={32}
+                        onChange={(v) => {
+                          const next = [...qualifiers]
+                          next[qi] = { ...q, offset: v - 1 }
+                          updateQualifiers(next)
+                        }}
+                      />
+                      <span className="shrink-0 text-xs text-zinc-400">º, pegando</span>
+                      <Stepper
+                        value={q.count}
+                        min={1}
+                        max={16}
+                        onChange={(v) => {
+                          const next = [...qualifiers]
+                          next[qi] = { ...q, count: v }
+                          updateQualifiers(next)
+                        }}
+                      />
+                      <button
+                        onClick={() => updateQualifiers(qualifiers.filter((_, i) => i !== qi))}
+                        className="shrink-0 text-zinc-600 transition-colors hover:text-blood-400"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {qualifiers.length < eligibleSources.length && (
+                <button
+                  onClick={addQualifier}
+                  className="flex items-center gap-1.5 text-xs text-zinc-500 transition-colors hover:text-zinc-200"
+                >
+                  <Plus size={13} /> Adicionar fonte de classificação
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Elenco próprio do campeonato (subconjunto do pool) — necessário pra ligar divisões.
+              Soma-se aos classificados dinâmicos quando ambos existem. */}
+          <div className="mb-3">
+            <button
+              onClick={() => setTeamsOpen((o) => !o)}
+              className="flex w-full items-center gap-2 rounded-xl border border-white/5 bg-ink-850/60 px-3 py-2 text-left transition hover:border-blood-600/40"
+            >
+              <Users size={13} className="text-blood-400" />
+              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-400">
+                Elenco próprio
+              </span>
+              <span className="rounded-full bg-blood-950/50 px-2 py-0.5 text-[10px] font-semibold text-blood-200">
+                {slotTeamIds.length > 0 ? `${slotTeamIds.length} times` : 'pool inteiro'}
+              </span>
+              <ChevronDown
+                size={15}
+                className={cx('ml-auto text-zinc-500 transition-transform', teamsOpen && 'rotate-180')}
+              />
+            </button>
+            {teamsOpen && (
+              <div className="mt-2 flex flex-col gap-2 rounded-xl border border-white/5 bg-ink-900/40 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="relative flex-1">
+                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+                    <input
+                      className="input py-1.5 pl-8 text-xs"
+                      placeholder="Buscar no pool…"
+                      value={teamSearch}
+                      onChange={(e) => setTeamSearch(e.target.value)}
+                    />
+                  </div>
+                  {slotTeamIds.length > 0 && (
+                    <button
+                      onClick={() => onChange({ teamIds: undefined })}
+                      className="shrink-0 text-xs text-zinc-500 underline hover:text-zinc-200"
+                    >
+                      usar pool inteiro
+                    </button>
+                  )}
+                </div>
+                <div className="grid max-h-56 grid-cols-2 gap-1.5 overflow-y-auto pr-1 sm:grid-cols-3">
+                  {filteredPool.map((t) => {
+                    const sel = slotTeamIds.includes(t.id)
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() => toggleSlotTeam(t.id)}
+                        className={cx(
+                          'flex items-center gap-2 rounded-lg border p-1.5 text-left transition',
+                          sel ? 'border-blood-600/50 bg-blood-950/25' : 'border-white/5 bg-ink-800/60 hover:border-white/15'
+                        )}
+                      >
+                        <TeamBadge team={t} size="xs" />
+                        <span className="truncate text-[11px] font-medium text-zinc-200">{t.name}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+                <p className="text-[11px] leading-snug text-zinc-600">
+                  Sem seleção, o campeonato usa o pool inteiro da temporada. Pra interligar divisões
+                  (acesso/descenso), cada divisão precisa de um elenco próprio.
+                </p>
+              </div>
+            )}
+          </div>
+
           <div className="flex flex-wrap gap-4">
             {sport === 'esports' && (
               <div className="flex items-center gap-3">
@@ -999,6 +1228,124 @@ function SlotEditor({
   )
 }
 
+// ─── Divisões interligadas (acesso/descenso) ────────────────────────────────
+
+function BoundariesEditor({
+  slots,
+  boundaries,
+  onChange
+}: {
+  slots: SeasonSlot[]
+  boundaries: DivisionBoundary[]
+  onChange: (b: DivisionBoundary[]) => void
+}) {
+  // só slots com elenco próprio podem participar de uma ligação
+  const eligible = slots.filter((s) => s.teamIds && s.teamIds.length > 0)
+
+  const addBoundary = () => {
+    const used = new Set(boundaries.flatMap((b) => [b.upperSlotId + '|' + b.lowerSlotId]))
+    // sugere o primeiro par de elegíveis ainda não ligado
+    let upper = eligible[0]?.id ?? ''
+    let lower = eligible[1]?.id ?? ''
+    outer: for (const u of eligible) {
+      for (const l of eligible) {
+        if (u.id !== l.id && !used.has(u.id + '|' + l.id)) {
+          upper = u.id
+          lower = l.id
+          break outer
+        }
+      }
+    }
+    onChange([...boundaries, { upperSlotId: upper, lowerSlotId: lower, count: 2 }])
+  }
+
+  const update = (idx: number, patch: Partial<DivisionBoundary>) =>
+    onChange(boundaries.map((b, i) => (i === idx ? { ...b, ...patch } : b)))
+  const remove = (idx: number) => onChange(boundaries.filter((_, i) => i !== idx))
+
+  const selectCls =
+    'input w-auto min-w-0 flex-1 py-1.5 text-xs'
+
+  return (
+    <div className="panel p-4">
+      <p className="mb-1 flex items-center gap-2 text-sm font-bold text-white">
+        <TrendingDown size={15} className="text-blood-400" /> Ligar divisões
+      </p>
+      <p className="mb-3 text-xs leading-snug text-zinc-500">
+        Acesso e rebaixamento: ao fim de cada ano, os últimos colocados da divisão de cima trocam de
+        lugar com os primeiros da divisão de baixo. Cada divisão precisa ter um <strong>elenco próprio</strong>{' '}
+        (defina no campeonato acima).
+      </p>
+
+      {eligible.length < 2 ? (
+        <p className="rounded-xl bg-ink-800/60 px-3 py-2.5 text-xs text-zinc-500">
+          Defina o elenco próprio de pelo menos 2 campeonatos para poder interligá-los.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {boundaries.map((b, i) => {
+            const invalid =
+              b.upperSlotId === b.lowerSlotId ||
+              !eligible.some((s) => s.id === b.upperSlotId) ||
+              !eligible.some((s) => s.id === b.lowerSlotId)
+            return (
+              <div
+                key={i}
+                className={cx(
+                  'flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2.5',
+                  invalid ? 'border-amber-500/40 bg-amber-950/10' : 'border-white/5 bg-ink-800/60'
+                )}
+              >
+                <select
+                  className={selectCls}
+                  value={b.upperSlotId}
+                  onChange={(e) => update(i, { upperSlotId: e.target.value })}
+                >
+                  {eligible.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} (superior)
+                    </option>
+                  ))}
+                </select>
+                <span className="shrink-0 text-xs text-zinc-500">↕</span>
+                <select
+                  className={selectCls}
+                  value={b.lowerSlotId}
+                  onChange={(e) => update(i, { lowerSlotId: e.target.value })}
+                >
+                  {eligible.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} (inferior)
+                    </option>
+                  ))}
+                </select>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="text-xs text-zinc-400">sobem/descem</span>
+                  <Stepper value={b.count} min={1} max={8} onChange={(v) => update(i, { count: v })} />
+                </div>
+                <button onClick={() => remove(i)} className="shrink-0 text-zinc-600 transition-colors hover:text-blood-400">
+                  <X size={14} />
+                </button>
+                {invalid && (
+                  <p className="w-full text-[11px] text-amber-300">
+                    Escolha duas divisões diferentes (ambas com elenco próprio) — esta ligação será ignorada.
+                  </p>
+                )}
+              </div>
+            )
+          })}
+          <button
+            onClick={addBoundary}
+            className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-white/10 py-2.5 text-xs text-zinc-500 transition hover:border-white/20 hover:text-zinc-300"
+          >
+            <Plus size={14} /> Adicionar ligação entre divisões
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Hub (temporada ativa em andamento) ─────────────────────────────────────
 
 function SeasonHub({
@@ -1044,11 +1391,11 @@ function SeasonHub({
 
   const handleStart = () => {
     if (!currentSlot) return
-    // campeonato com elenco próprio usa só os times definidos; senão, pool global
-    const slotTeams =
-      currentSlot.teamIds && currentSlot.teamIds.length
-        ? s.teamPool.filter((t) => currentSlot.teamIds!.includes(t.id))
-        : s.teamPool
+    // elenco fixo (teamIds) + vagas por classificação dinâmica (qualifiesFrom) SOMAM —
+    // é o que permite, por ex., a Libertadores ter clubes fixos + quem vier do
+    // Pré-Libertadores no mesmo ano. Sem nenhum dos dois, usa o pool inteiro.
+    const allIds = resolveSlotTeamIds(currentSlot, thisYear?.slotRankings)
+    const slotTeams: Team[] = allIds.length ? s.teamPool.filter((t) => allIds.includes(t.id)) : s.teamPool
     startTournament({
       name: currentSlot.name,
       sport: s.sport,
@@ -1398,6 +1745,60 @@ function SeasonYearSummary({
             </div>
           )}
         </div>
+
+        {/* Acesso e rebaixamento entre divisões interligadas */}
+        {(yearEntry?.movements ?? []).length > 0 && (
+          <div className="panel mb-5 p-5">
+            <p className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              <TrendingUp size={14} className="text-win-400" />
+              Acesso e rebaixamento {isCompleted ? '' : `— valem para o Ano ${yearNum + 1}`}
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-win-400">
+                  <TrendingUp size={11} className="mr-1 inline" /> Subiram
+                </p>
+                {(yearEntry?.movements ?? [])
+                  .filter((m) => m.kind === 'promotion')
+                  .map((m) => {
+                    const team = poolMap[m.teamId]
+                    return (
+                      <div key={m.teamId + m.toSlotId} className="mb-1.5 flex items-center gap-2 rounded-lg bg-win-950/30 px-2.5 py-2">
+                        {team && <TeamBadge team={team} size="xs" />}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-semibold text-zinc-100">{m.teamName}</p>
+                          <p className="truncate text-[10px] text-zinc-500">
+                            {m.fromSlotName} → {m.toSlotName}
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  })}
+              </div>
+              <div>
+                <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-blood-400">
+                  <TrendingDown size={11} className="mr-1 inline" /> Caíram
+                </p>
+                {(yearEntry?.movements ?? [])
+                  .filter((m) => m.kind === 'relegation')
+                  .map((m) => {
+                    const team = poolMap[m.teamId]
+                    return (
+                      <div key={m.teamId + m.toSlotId} className="mb-1.5 flex items-center gap-2 rounded-lg bg-blood-950/30 px-2.5 py-2">
+                        {team && <TeamBadge team={team} size="xs" />}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-semibold text-zinc-100">{m.teamName}</p>
+                          <p className="truncate text-[10px] text-zinc-500">
+                            {m.fromSlotName} → {m.toSlotName}
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  })}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Scorers year + all-time */}
         <div className="mb-5 grid gap-4 sm:grid-cols-2">

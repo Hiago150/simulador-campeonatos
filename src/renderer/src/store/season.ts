@@ -1,8 +1,10 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type {
+  DivisionBoundary,
   EsportsGame,
   Season,
+  SeasonMovement,
   SeasonRecords,
   SeasonScorerEntry,
   SeasonSlot,
@@ -12,6 +14,7 @@ import type {
   Tournament
 } from '../types'
 import { uid } from '../engine/rng'
+import { finalRanking } from '../engine/ranking'
 
 // ─── Recordes: extrai de um torneio e combina (all-time ou por ano) ──────────
 
@@ -142,7 +145,93 @@ interface SeasonDraft {
   game?: EsportsGame
   period: number
   slots: SeasonSlot[]
+  divisionBoundaries?: DivisionBoundary[]
   teamPool: Team[]
+}
+
+// ─── Acesso/descenso entre divisões interligadas ─────────────────────────────
+
+/**
+ * Resolve os times de um slot na hora de iniciar o campeonato do ano:
+ * elenco fixo (`teamIds`) + vagas dinâmicas (`qualifiesFrom`, faixa
+ * offset..offset+count da classificação final do slot de origem), sem
+ * duplicatas. Fonte ainda não concluída no ano é ignorada com segurança.
+ */
+export function resolveSlotTeamIds(
+  slot: SeasonSlot,
+  slotRankings: Record<string, string[]> | undefined
+): string[] {
+  const fixed = slot.teamIds ?? []
+  const dynamic = (slot.qualifiesFrom ?? []).flatMap((q) => {
+    const start = q.offset ?? 0
+    return slotRankings?.[q.slotId]?.slice(start, start + q.count) ?? []
+  })
+  return [...new Set([...fixed, ...dynamic])]
+}
+
+/**
+ * Calcula e aplica as trocas de acesso/descenso ao fim do ano: para cada
+ * fronteira, os últimos `count` do slot superior trocam com os primeiros
+ * `count` do inferior. Todas as trocas são calculadas ANTES de aplicar (a
+ * classificação do ano é a fonte), então uma divisão do meio (ex.: Série B)
+ * pode ceder times pra cima e pra baixo no mesmo ano sem conflito.
+ */
+export function computeMovements(
+  slots: SeasonSlot[],
+  boundaries: DivisionBoundary[],
+  rankings: Record<string, string[]>,
+  nameOfTeam: (id: string) => string
+): { slots: SeasonSlot[]; movements: SeasonMovement[] } {
+  const slotById = new Map(slots.map((s) => [s.id, s]))
+  const changes = new Map<string, { remove: Set<string>; add: string[] }>()
+  const changeOf = (id: string) => {
+    if (!changes.has(id)) changes.set(id, { remove: new Set(), add: [] })
+    return changes.get(id)!
+  }
+  const movements: SeasonMovement[] = []
+
+  for (const b of boundaries) {
+    const upper = slotById.get(b.upperSlotId)
+    const lower = slotById.get(b.lowerSlotId)
+    const upRank = rankings[b.upperSlotId]
+    const loRank = rankings[b.lowerSlotId]
+    // fronteira só vale se ambos os slots têm elenco próprio e classificação registrada
+    if (!upper?.teamIds?.length || !lower?.teamIds?.length || !upRank?.length || !loRank?.length) continue
+    const n = Math.max(0, Math.min(b.count, Math.floor(Math.min(upRank.length, loRank.length) / 2)))
+    if (n === 0) continue
+
+    const relegated = upRank.slice(-n)
+    const promoted = loRank.slice(0, n)
+
+    for (const id of relegated) {
+      changeOf(upper.id).remove.add(id)
+      changeOf(lower.id).add.push(id)
+      movements.push({
+        teamId: id, teamName: nameOfTeam(id),
+        fromSlotId: upper.id, fromSlotName: upper.name,
+        toSlotId: lower.id, toSlotName: lower.name,
+        kind: 'relegation'
+      })
+    }
+    for (const id of promoted) {
+      changeOf(lower.id).remove.add(id)
+      changeOf(upper.id).add.push(id)
+      movements.push({
+        teamId: id, teamName: nameOfTeam(id),
+        fromSlotId: lower.id, fromSlotName: lower.name,
+        toSlotId: upper.id, toSlotName: upper.name,
+        kind: 'promotion'
+      })
+    }
+  }
+
+  if (movements.length === 0) return { slots, movements }
+  const nextSlots = slots.map((s) => {
+    const c = changes.get(s.id)
+    if (!c || !s.teamIds) return s
+    return { ...s, teamIds: [...s.teamIds.filter((id) => !c.remove.has(id)), ...c.add] }
+  })
+  return { slots: nextSlots, movements }
 }
 
 interface SeasonStore {
@@ -186,6 +275,7 @@ export const useSeasons = create<SeasonStore>()(
           game: draft.game,
           period: draft.period,
           slots: draft.slots,
+          divisionBoundaries: draft.divisionBoundaries,
           teamPool,
           currentYear: 1,
           currentSlotIndex: 0,
@@ -244,6 +334,9 @@ export const useSeasons = create<SeasonStore>()(
         const slotRecords = slotRecordsOf(tournament, nameOf, active.currentYear, slot.name, active.sport)
         const records = mergeRecords(active.records, slotRecords)
 
+        // classificação final do slot (melhor → pior) — base do acesso/descenso
+        const ranking = finalRanking(tournament)
+
         let years = JSON.parse(JSON.stringify(active.years)) as SeasonYearEntry[]
 
         const yIdx = years.findIndex((y) => y.year === active.currentYear)
@@ -260,12 +353,14 @@ export const useSeasons = create<SeasonStore>()(
             else years[yIdx].scorers.push({ ...sc })
           }
           years[yIdx].records = mergeRecords(years[yIdx].records, slotRecords)
+          years[yIdx].slotRankings = { ...(years[yIdx].slotRankings ?? {}), [slot.id]: ranking }
         } else {
           years.push({
             year: active.currentYear,
             champions: [{ slotId: slot.id, slotName: slot.name, teamId: tournament.champion, teamName: nameOf(tournament.champion) }],
             scorers: [...slotScorers],
             records: mergeRecords(undefined, slotRecords),
+            slotRankings: { [slot.id]: ranking },
             completed: false
           })
         }
@@ -286,10 +381,27 @@ export const useSeasons = create<SeasonStore>()(
         let status: Season['status'] = 'playing'
         let currentYear = active.currentYear
         let currentSlotIndex = nextSlot
+        let slots = active.slots
 
         if (nextSlot >= active.slots.length) {
           const yi = years.findIndex((y) => y.year === active.currentYear)
-          if (yi >= 0) years[yi] = { ...years[yi], completed: true }
+          if (yi >= 0) {
+            // fim do ano: aplica o acesso/descenso das divisões interligadas
+            // (as trocas valem a partir do ano seguinte)
+            if (active.divisionBoundaries?.length) {
+              const poolName = (id: string) => active.teamPool.find((t) => t.id === id)?.name ?? id
+              const result = computeMovements(
+                active.slots,
+                active.divisionBoundaries,
+                years[yi].slotRankings ?? {},
+                poolName
+              )
+              slots = result.slots
+              years[yi] = { ...years[yi], movements: result.movements, completed: true }
+            } else {
+              years[yi] = { ...years[yi], completed: true }
+            }
+          }
           currentSlotIndex = 0
           if (active.currentYear >= active.period) {
             status = 'completed'
@@ -300,6 +412,7 @@ export const useSeasons = create<SeasonStore>()(
 
         const updated: Season = {
           ...active,
+          slots,
           currentYear,
           currentSlotIndex,
           years,
