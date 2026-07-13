@@ -1,9 +1,10 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   ArrowLeft,
   CalendarDays,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   Crosshair,
   Crown,
   Eye,
@@ -39,7 +40,7 @@ import type {
   TournamentConfig
 } from '../types'
 import { useApp } from '../store/app'
-import { useSeasons, resolveSlotTeamIds } from '../store/season'
+import { useSeasons, resolveSlotArrivals, type SlotArrival } from '../store/season'
 import { useHistory } from '../store/history'
 import { presetsForSport } from '../data/teams'
 import { collectionsForSport, collectionsGrouped } from '../data/collections'
@@ -58,6 +59,88 @@ function viewForStatus(status: Season['status']): MainView {
   if (status === 'completed') return 'finale'
   if (status === 'year-summary') return 'summary'
   return 'hub'
+}
+
+const REGION_LABEL: Record<string, string> = {
+  americas: 'Americas',
+  emea: 'EMEA',
+  pacific: 'Pacific',
+  china: 'China'
+}
+
+/** só os classificados dinâmicos (com posição de chegada) viram entrada no mapa de arrivals do motor */
+function arrivalsMap(arrivals: SlotArrival[]): Record<string, { fromSlotId?: string; rank?: number }> | undefined {
+  const out: Record<string, { fromSlotId?: string; rank?: number }> = {}
+  for (const a of arrivals) if (a.rank != null) out[a.teamId] = { fromSlotId: a.fromSlotId, rank: a.rank }
+  return Object.keys(out).length ? out : undefined
+}
+
+// ─── Mecanismos específicos do preset VCT (ver Rodadas de refinamento) ──────
+
+/** classificação combinada do Stage 2 de uma região: playoffs primeiro (quem chegou lá), depois quem caiu nos Play-Ins */
+export function vctStage2Ranking(
+  slotRankings: Record<string, string[]> | undefined,
+  playoffsSlotId: string,
+  playInsSlotId: string
+): string[] {
+  const playoffs = slotRankings?.[playoffsSlotId] ?? []
+  const playins = slotRankings?.[playInsSlotId] ?? []
+  return [...playoffs, ...playins.filter((id) => !playoffs.includes(id))]
+}
+
+/** 2 vagas de Champions por "consistência no ano" — média de colocação em Kickoff/Stage1/Stage2, excluindo quem já veio pelo playoff */
+export function resolveVCTConsistencyWildcards(
+  cfg: NonNullable<SeasonSlot['vctConsistencyWildcards']>,
+  thisYearRankings: Record<string, string[]> | undefined,
+  alreadyIn: Set<string>
+): SlotArrival[] {
+  const out: SlotArrival[] = []
+  for (const r of cfg.regions) {
+    const koRank = thisYearRankings?.[r.kickoffSlotId] ?? []
+    const s1Rank = thisYearRankings?.[r.stage1SlotId] ?? []
+    const s2Rank = vctStage2Ranking(thisYearRankings, r.stage2PlayoffsSlotId, r.stage2PlayInsSlotId)
+    const pool = new Set([...koRank, ...s1Rank, ...s2Rank])
+    const scored = Array.from(pool)
+      .filter((id) => !alreadyIn.has(id))
+      .map((id) => {
+        const ranks = [koRank.indexOf(id), s1Rank.indexOf(id), s2Rank.indexOf(id)]
+          .filter((i) => i >= 0)
+          .map((i) => i + 1)
+        const avg = ranks.length ? ranks.reduce((a, b) => a + b, 0) / ranks.length : Infinity
+        return { id, avg }
+      })
+      .sort((a, b) => a.avg - b.avg)
+    for (const { id } of scored.slice(0, cfg.count)) {
+      out.push({ teamId: id, fromSlotId: r.stage2PlayoffsSlotId, rank: 3 })
+    }
+  }
+  return out
+}
+
+/** bye do Kickoff pros representantes da região no Champions do ano anterior (sem efeito no 1º ano) */
+export function resolveVCTPreviousYearBye(slot: SeasonSlot, season: Season): SlotArrival[] {
+  if (!slot.previousYearBye) return []
+  const prevYear = season.years.find((y) => y.year === season.currentYear - 1)
+  const ranking = prevYear?.slotRankings?.[slot.previousYearBye.fromSlotId] ?? []
+  const own = new Set(slot.teamIds ?? [])
+  return ranking
+    .filter((id) => own.has(id))
+    .map((teamId, i) => ({ teamId, fromSlotId: slot.previousYearBye!.fromSlotId, rank: i + 1 }))
+}
+
+/** arrivals extras (fora do `qualifiesFrom` genérico) que o preset VCT precisa — soma ao resultado normal de `resolveSlotArrivals` */
+export function resolveVCTExtraArrivals(
+  slot: SeasonSlot,
+  season: Season,
+  thisYearRankings: Record<string, string[]> | undefined,
+  baseArrivals: SlotArrival[]
+): SlotArrival[] {
+  const extras = resolveVCTPreviousYearBye(slot, season)
+  if (slot.vctConsistencyWildcards) {
+    const already = new Set(baseArrivals.map((a) => a.teamId))
+    extras.push(...resolveVCTConsistencyWildcards(slot.vctConsistencyWildcards, thisYearRankings, already))
+  }
+  return extras
 }
 
 export function SeasonScreen() {
@@ -387,6 +470,37 @@ function SeasonWizard({ onBack, onDone }: { onBack: () => void; onDone: (s: Seas
   const toggleTeam = (id: string) =>
     setPoolIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]))
 
+  const paintValueRef = useRef<boolean | null>(null)
+  const isPaintingRef = useRef(false)
+
+  useEffect(() => {
+    const onUp = () => {
+      isPaintingRef.current = false
+      paintValueRef.current = null
+    }
+    window.addEventListener('mouseup', onUp)
+    return () => window.removeEventListener('mouseup', onUp)
+  }, [])
+
+  const applyPaint = (id: string, value: boolean) =>
+    setPoolIds((ids) => {
+      const has = ids.includes(id)
+      if (value && !has) return [...ids, id]
+      if (!value && has) return ids.filter((x) => x !== id)
+      return ids
+    })
+
+  const startPaintTeam = (id: string) => {
+    const value = !poolIds.includes(id)
+    isPaintingRef.current = true
+    paintValueRef.current = value
+    applyPaint(id, value)
+  }
+
+  const continuePaintTeam = (id: string) => {
+    if (isPaintingRef.current && paintValueRef.current !== null) applyPaint(id, paintValueRef.current)
+  }
+
   const changeSport = (sp: Sport) => {
     setSport(sp)
     setPoolIds([])
@@ -417,6 +531,17 @@ function SeasonWizard({ onBack, onDone }: { onBack: () => void; onDone: (s: Seas
         count: q.count,
         offset: q.offset
       })),
+      phaseLabel: sl.phaseLabel,
+      vctConsistencyWildcards: sl.vctConsistencyWildcards && {
+        count: sl.vctConsistencyWildcards.count,
+        regions: sl.vctConsistencyWildcards.regions.map((r) => ({
+          kickoffSlotId: slotIds[r.kickoff],
+          stage1SlotId: slotIds[r.stage1],
+          stage2PlayoffsSlotId: slotIds[r.stage2Playoffs],
+          stage2PlayInsSlotId: slotIds[r.stage2PlayIns]
+        }))
+      },
+      previousYearBye: sl.previousYearBye && { fromSlotId: slotIds[sl.previousYearBye.fromSlot] },
       config: {
         ...defaultConfig(p.sport, p.game),
         ...sl.config,
@@ -435,7 +560,7 @@ function SeasonWizard({ onBack, onDone }: { onBack: () => void; onDone: (s: Seas
   }
 
   const addSlot = () => {
-    if (slots.length >= 10) return
+    if (slots.length >= 30) return
     setSlots((prev) => [
       ...prev,
       {
@@ -455,6 +580,18 @@ function SeasonWizard({ onBack, onDone }: { onBack: () => void; onDone: (s: Seas
     setSlots((prev) => prev.filter((_, i) => i !== idx))
     // remove ligações que apontavam pro slot excluído
     if (removed) setBoundaries((prev) => prev.filter((b) => b.upperSlotId !== removed.id && b.lowerSlotId !== removed.id))
+  }
+
+  // reordena a sequência anual — qualifiesFrom/boundaries referenciam por id,
+  // então trocar a posição no array não quebra nenhuma ligação já configurada
+  const moveSlot = (idx: number, dir: -1 | 1) => {
+    setSlots((prev) => {
+      const target = idx + dir
+      if (target < 0 || target >= prev.length) return prev
+      const next = [...prev]
+      ;[next[idx], next[target]] = [next[target], next[idx]]
+      return next
+    })
   }
 
   // ligações válidas: slots existem, são diferentes e ambos têm elenco próprio
@@ -776,13 +913,20 @@ function SeasonWizard({ onBack, onDone }: { onBack: () => void; onDone: (s: Seas
               </div>
             )}
 
-            <div className="grid max-h-[42vh] grid-cols-2 gap-1.5 overflow-y-auto pr-1 sm:grid-cols-3">
+            <div className="grid max-h-[42vh] select-none grid-cols-2 gap-1.5 overflow-y-auto pr-1 sm:grid-cols-3">
               {filtered.map((t) => {
                 const sel = poolIds.includes(t.id)
                 return (
                   <button
                     key={t.id}
-                    onClick={() => toggleTeam(t.id)}
+                    onMouseDown={() => startPaintTeam(t.id)}
+                    onMouseEnter={() => continuePaintTeam(t.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        toggleTeam(t.id)
+                      }
+                    }}
                     className={cx(
                       'flex items-center gap-2 rounded-xl border p-2 text-left transition',
                       sel
@@ -816,9 +960,11 @@ function SeasonWizard({ onBack, onDone }: { onBack: () => void; onDone: (s: Seas
                 earlierSlots={slots.slice(0, idx)}
                 onChange={(patch) => updateSlot(idx, patch)}
                 onDelete={() => removeSlot(idx)}
+                onMoveUp={idx > 0 ? () => moveSlot(idx, -1) : undefined}
+                onMoveDown={idx < slots.length - 1 ? () => moveSlot(idx, 1) : undefined}
               />
             ))}
-            {slots.length < 10 && (
+            {slots.length < 30 && (
               <button
                 onClick={addSlot}
                 className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-white/10 py-4 text-sm text-zinc-500 transition hover:border-white/20 hover:text-zinc-300"
@@ -934,7 +1080,9 @@ function SlotEditor({
   poolTeams,
   earlierSlots,
   onChange,
-  onDelete
+  onDelete,
+  onMoveUp,
+  onMoveDown
 }: {
   slot: SeasonSlot
   index: number
@@ -946,6 +1094,9 @@ function SlotEditor({
   earlierSlots: SeasonSlot[]
   onChange: (patch: Partial<SeasonSlot>) => void
   onDelete: () => void
+  /** ausente quando já é o primeiro/último da sequência */
+  onMoveUp?: () => void
+  onMoveDown?: () => void
 }) {
   const [expanded, setExpanded] = useState(index === 0)
   const [teamsOpen, setTeamsOpen] = useState(false)
@@ -992,6 +1143,24 @@ function SlotEditor({
           <span className="tag text-[10px] border-blood-700/40 text-blood-300">{slot.teamIds.length} times</span>
         )}
         <span className="tag text-[10px]">{FORMAT_META[slot.format].short}</span>
+        <div className="flex items-center gap-0.5">
+          <button
+            onClick={(e) => { e.stopPropagation(); onMoveUp?.() }}
+            disabled={!onMoveUp}
+            title="Mover pra cima"
+            className="text-zinc-600 transition-colors hover:text-zinc-200 disabled:opacity-20 disabled:hover:text-zinc-600"
+          >
+            <ChevronUp size={15} />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onMoveDown?.() }}
+            disabled={!onMoveDown}
+            title="Mover pra baixo"
+            className="text-zinc-600 transition-colors hover:text-zinc-200 disabled:opacity-20 disabled:hover:text-zinc-600"
+          >
+            <ChevronDown size={15} />
+          </button>
+        </div>
         <button
           onClick={(e) => { e.stopPropagation(); onDelete() }}
           className="text-zinc-600 hover:text-blood-400 transition-colors"
@@ -1193,6 +1362,12 @@ function SlotEditor({
               <div className="flex items-center gap-3">
                 <span className="text-xs text-zinc-400">Ida e volta</span>
                 <Toggle checked={slot.config.homeAndAway} onChange={(v) => updateConfig({ homeAndAway: v })} />
+              </div>
+            )}
+            {sport === 'football' && (slot.format === 'cup' || slot.format === 'groups' || slot.format === 'league-playoffs') && (
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-zinc-400">Mata-mata ida e volta</span>
+                <Toggle checked={slot.config.twoLeggedKO} onChange={(v) => updateConfig({ twoLeggedKO: v })} />
               </div>
             )}
             {slot.format === 'groups' && (
@@ -1410,14 +1585,18 @@ function SeasonHub({
     // elenco fixo (teamIds) + vagas por classificação dinâmica (qualifiesFrom) SOMAM —
     // é o que permite, por ex., a Libertadores ter clubes fixos + quem vier do
     // Pré-Libertadores no mesmo ano. Sem nenhum dos dois, usa o pool inteiro.
-    const allIds = resolveSlotTeamIds(currentSlot, thisYear?.slotRankings)
+    const baseArrivals = resolveSlotArrivals(currentSlot, thisYear?.slotRankings)
+    const arrivals = [...baseArrivals, ...resolveVCTExtraArrivals(currentSlot, s, thisYear?.slotRankings, baseArrivals)]
+    const allIds = arrivals.map((a) => a.teamId)
     const slotTeams: Team[] = allIds.length ? s.teamPool.filter((t) => allIds.includes(t.id)) : s.teamPool
     startTournament({
       name: currentSlot.name,
       sport: s.sport,
       format: currentSlot.format,
       teams: slotTeams,
-      config: { ...currentSlot.config, game: s.game ?? currentSlot.config.game }
+      config: { ...currentSlot.config, game: s.game ?? currentSlot.config.game },
+      arrivals: arrivalsMap(arrivals),
+      fromSeason: true
     })
     // startTournament is synchronous — current is set before this line runs
     const id = useApp.getState().current?.id ?? null
@@ -1427,36 +1606,62 @@ function SeasonHub({
   // Simula automaticamente todos os campeonatos restantes DESTE ano (sem passar
   // pela tela de torneio) — cada um fica gravado com o campeonato completo
   // (tabelas/chaveamento/partidas) pra poder ser revisto depois em detalhe.
+  // Roda um campeonato por vez (via setTimeout entre cada um, não um único loop
+  // síncrono) pra não travar a interface em temporadas com campeonatos pesados,
+  // e para com segurança (sem deixar "Simulando…" preso) se algum falhar.
   const handleSimulateAllRemaining = () => {
     if (bulkSimulating || !currentSlot) return
     setBulkSimulating(true)
     const rosterOverrides = useApp.getState().rosterOverrides
-    // adia um tick pra "Simulando…" pintar antes do trabalho síncrono pesado
-    setTimeout(() => {
-      let active = useSeasons.getState().activeSeason
-      let guard = 0
-      while (active && active.status === 'playing' && active.id === s.id && guard < 100) {
-        const slot = active.slots[active.currentSlotIndex]
-        if (!slot) break
+
+    const stop = () => {
+      setBulkSimulating(false)
+      const active = useSeasons.getState().activeSeason
+      if (active) onAdvance(active)
+    }
+
+    const step = (guard: number) => {
+      const active = useSeasons.getState().activeSeason
+      if (!active || active.status !== 'playing' || active.id !== s.id || guard >= 100) {
+        stop()
+        return
+      }
+      const slot = active.slots[active.currentSlotIndex]
+      if (!slot) {
+        stop()
+        return
+      }
+      try {
         const thisYearNow = active.years.find((y) => y.year === active.currentYear)
-        const allIds = resolveSlotTeamIds(slot, thisYearNow?.slotRankings)
-        const slotTeams: Team[] = allIds.length ? active.teamPool.filter((t) => allIds.includes(t.id)) : active.teamPool
+        const baseArrivals = resolveSlotArrivals(slot, thisYearNow?.slotRankings)
+        const arrivals = [...baseArrivals, ...resolveVCTExtraArrivals(slot, active, thisYearNow?.slotRankings, baseArrivals)]
+        const allIds = arrivals.map((a) => a.teamId)
+        const slotTeams: Team[] = allIds.length
+          ? active.teamPool.filter((t) => allIds.includes(t.id))
+          : active.teamPool
         const built = createTournament({
           name: slot.name,
           sport: active.sport,
           format: slot.format,
           teams: slotTeams,
           config: { ...slot.config, game: active.game ?? slot.config.game },
-          rosterOverrides
+          rosterOverrides,
+          arrivals: arrivalsMap(arrivals),
+          fromSeason: true
         })
         const played = simulateAll(built)
         recordSlotResult(played)
-        active = useSeasons.getState().activeSeason
-        guard++
+      } catch (err) {
+        console.error('Falha ao simular campeonato da temporada', err)
+        useApp.getState().setToast(`Não foi possível simular "${slot.name}" — parei por aqui`)
+        stop()
+        return
       }
-      setBulkSimulating(false)
-      if (active) onAdvance(active)
-    }, 30)
+      setTimeout(() => step(guard + 1), 0)
+    }
+
+    // adia um tick pra "Simulando…" pintar antes do primeiro campeonato
+    setTimeout(() => step(0), 30)
   }
 
   const handleAbandon = () => {
@@ -1502,20 +1707,29 @@ function SeasonHub({
               Sequência do ano — {s.currentSlotIndex}/{s.slots.length} concluídos
             </p>
             <div className="grid gap-1.5 sm:grid-cols-2">
-              {s.slots.map((slot, i) => {
-                const done = i < s.currentSlotIndex
-                const current = i === s.currentSlotIndex
-                const Icon = FORMAT_META[slot.format].icon
-                const champion = yearChampions.find((c) => c.slotId === slot.id)
-                const champTeam = champion ? poolMap[champion.teamId] : undefined
-                return (
-                  <div
-                    key={slot.id}
-                    className={cx(
-                      'flex flex-col gap-2 rounded-xl px-3 py-2.5 transition',
-                      current ? 'bg-blood-950/30 border border-blood-600/30' : done ? 'bg-ink-800/60' : 'bg-ink-800/30'
-                    )}
-                  >
+              {(() => {
+                let lastPhase: string | undefined
+                return s.slots.map((slot, i) => {
+                  const done = i < s.currentSlotIndex
+                  const current = i === s.currentSlotIndex
+                  const Icon = FORMAT_META[slot.format].icon
+                  const champion = yearChampions.find((c) => c.slotId === slot.id)
+                  const champTeam = champion ? poolMap[champion.teamId] : undefined
+                  const showPhaseHeader = !!slot.phaseLabel && slot.phaseLabel !== lastPhase
+                  lastPhase = slot.phaseLabel
+                  return (
+                    <Fragment key={slot.id}>
+                      {showPhaseHeader && (
+                        <p className="col-span-full mt-2 text-[11px] font-bold uppercase tracking-widest text-blood-400 first:mt-0">
+                          {slot.phaseLabel}
+                        </p>
+                      )}
+                      <div
+                        className={cx(
+                          'flex flex-col gap-2 rounded-xl px-3 py-2.5 transition',
+                          current ? 'bg-blood-950/30 border border-blood-600/30' : done ? 'bg-ink-800/60' : 'bg-ink-800/30'
+                        )}
+                      >
                     <div className="flex items-center gap-2.5">
                       <span className={cx('tnum w-4 text-right text-xs font-bold', current ? 'text-blood-400' : done ? 'text-zinc-400' : 'text-zinc-600')}>
                         {i + 1}
@@ -1531,25 +1745,57 @@ function SeasonHub({
                         <span className="shrink-0 text-[10px] text-zinc-600">Aguardando</span>
                       )}
                     </div>
-                    {done && champion && (
-                      <div className="flex items-center gap-1.5 pl-6">
-                        {champTeam ? <TeamBadge team={champTeam} size="xs" /> : <Trophy size={12} className="text-amber-400" />}
-                        <span className="min-w-0 flex-1 truncate text-xs font-medium text-zinc-300">{champion.teamName}</span>
-                        {thisYear?.tournaments?.[slot.id] && (
-                          <button
-                            onClick={() => viewTournament(thisYear.tournaments![slot.id])}
-                            title="Ver detalhes do campeonato"
-                            className="flex shrink-0 items-center gap-1 rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-semibold text-zinc-400 transition hover:border-blood-600/40 hover:text-blood-300"
-                          >
-                            <Eye size={11} /> Detalhes
-                          </button>
+                        {done && champion && (
+                          <div className="flex items-center gap-1.5 pl-6">
+                            {champTeam ? <TeamBadge team={champTeam} size="xs" /> : <Trophy size={12} className="text-amber-400" />}
+                            <span className="min-w-0 flex-1 truncate text-xs font-medium text-zinc-300">{champion.teamName}</span>
+                            {thisYear?.tournaments?.[slot.id] && (
+                              <button
+                                onClick={() => viewTournament(thisYear.tournaments![slot.id])}
+                                title="Ver detalhes do campeonato"
+                                className="flex shrink-0 items-center gap-1 rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-semibold text-zinc-400 transition hover:border-blood-600/40 hover:text-blood-300"
+                              >
+                                <Eye size={11} /> Detalhes
+                              </button>
+                            )}
+                          </div>
                         )}
                       </div>
-                    )}
-                  </div>
-                )
-              })}
+                    </Fragment>
+                  )
+                })
+              })()}
             </div>
+
+            {currentSlot &&
+              (currentSlot.qualifiesFrom?.length || currentSlot.previousYearBye || currentSlot.vctConsistencyWildcards) &&
+              (() => {
+              const base = resolveSlotArrivals(currentSlot, thisYear?.slotRankings)
+              const arrivals = [...base, ...resolveVCTExtraArrivals(currentSlot, s, thisYear?.slotRankings, base)].filter(
+                (a) => a.fromSlotId
+              )
+              if (arrivals.length === 0) return null
+              return (
+                <div className="mt-4 rounded-xl border border-white/5 bg-ink-850/40 p-3">
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+                    Classificados pra {currentSlot.name}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {arrivals.map((a) => {
+                      const team = poolMap[a.teamId]
+                      const label = team?.region ? `${REGION_LABEL[team.region] ?? team.region} #${a.rank}` : `#${a.rank}`
+                      return (
+                        <div key={a.teamId} className="flex items-center gap-1.5 rounded-full bg-ink-800/60 px-2 py-1">
+                          {team && <TeamBadge team={team} size="xs" />}
+                          <span className="truncate text-[11px] font-medium text-zinc-300">{team?.name ?? a.teamId}</span>
+                          <span className="shrink-0 text-[10px] text-zinc-600">{label}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })()}
 
             <div className="mt-4 flex flex-wrap gap-2">
               <Button variant="primary" icon={<Play size={14} />} onClick={handleStart} disabled={bulkSimulating}>

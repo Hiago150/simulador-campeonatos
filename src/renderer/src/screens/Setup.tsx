@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeft,
   Check,
@@ -120,6 +120,37 @@ export function SetupScreen() {
 
   const toggle = (id: string) =>
     setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]))
+
+  const paintValueRef = useRef<boolean | null>(null)
+  const isPaintingRef = useRef(false)
+
+  useEffect(() => {
+    const onUp = () => {
+      isPaintingRef.current = false
+      paintValueRef.current = null
+    }
+    window.addEventListener('mouseup', onUp)
+    return () => window.removeEventListener('mouseup', onUp)
+  }, [])
+
+  const applyPaint = (id: string, value: boolean) =>
+    setSelected((s) => {
+      const has = s.includes(id)
+      if (value && !has) return [...s, id]
+      if (!value && has) return s.filter((x) => x !== id)
+      return s
+    })
+
+  const startPaintTeam = (id: string) => {
+    const value = !selected.includes(id)
+    isPaintingRef.current = true
+    paintValueRef.current = value
+    applyPaint(id, value)
+  }
+
+  const continuePaintTeam = (id: string) => {
+    if (isPaintingRef.current && paintValueRef.current !== null) applyPaint(id, paintValueRef.current)
+  }
 
   const selectTopN = (n: number) => {
     const top = [...pool].sort((a, b) => b.strength - a.strength).slice(0, n).map((t) => t.id)
@@ -466,13 +497,20 @@ export function SetupScreen() {
               </div>
             )}
 
-            <div className="grid max-h-[420px] grid-cols-1 gap-1.5 overflow-y-auto pr-1 sm:grid-cols-2">
+            <div className="grid max-h-[420px] select-none grid-cols-1 gap-1.5 overflow-y-auto pr-1 sm:grid-cols-2">
               {filtered.map((t) => {
                 const sel = selected.includes(t.id)
                 return (
                   <button
                     key={t.id}
-                    onClick={() => toggle(t.id)}
+                    onMouseDown={() => startPaintTeam(t.id)}
+                    onMouseEnter={() => continuePaintTeam(t.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        toggle(t.id)
+                      }
+                    }}
                     className={cx(
                       'flex items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition',
                       sel ? 'border-blood-600/50 bg-blood-950/20' : 'border-white/5 bg-ink-850/60 hover:border-white/15'

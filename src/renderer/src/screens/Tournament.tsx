@@ -14,7 +14,6 @@ import {
   LayoutGrid,
   MoreHorizontal,
   RotateCcw,
-  Save,
   StepForward,
   Trophy
 } from 'lucide-react'
@@ -78,7 +77,6 @@ export function TournamentScreen() {
   const concludeTournament = useApp((s) => s.concludeTournament)
   const reset = useApp((s) => s.reset)
   const exportCurrent = useApp((s) => s.exportCurrent)
-  const saveCurrentToLibrary = useApp((s) => s.saveCurrentToLibrary)
   const go = useApp((s) => s.go)
   const closeTournament = useApp((s) => s.closeTournament)
   const reviewMode = useApp((s) => s.reviewMode)
@@ -95,11 +93,15 @@ export function TournamentScreen() {
   const mcRunAll = useApp((s) => s.mcRunAll)
   const lastRoundIds = useApp((s) => s.lastRoundIds)
 
-  const [selectedMatch, setSelectedMatch] = useState<Match | null>(null)
+  // guarda só o id — o objeto Match é derivado de t.matches a cada render,
+  // então o modal reflete ao vivo o resultado assim que uma partida é simulada
+  // (necessário pro botão "Assistir" da prévia: simula e já entra no replay)
+  const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null)
   const [mcView, setMcView] = useState<'play' | 'mc'>('play')
   const [confirmReset, setConfirmReset] = useState(false)
 
   const teams = useMemo(() => (t ? teamMap(t) : {}), [t])
+  const selectedMatch = selectedMatchId ? t?.matches.find((m) => m.id === selectedMatchId) ?? null : null
   const roundInfo = useMemo(() => (t ? currentRoundInfo(t) : { label: '', matchIds: [] }), [t])
   const prog = useMemo(() => (t ? progress(t) : { played: 0, total: 0 }), [t])
   const narrSummary = useMemo(() => (t ? tournamentSummary(t, teams) : null), [t, teams])
@@ -189,7 +191,6 @@ export function TournamentScreen() {
             <HeaderMenu
               items={[
                 ...(reviewMode ? [] : [{ label: 'Refazer', icon: <RotateCcw size={15} />, onClick: handleReset }]),
-                { label: 'Salvar na biblioteca', icon: <Save size={15} />, onClick: saveCurrentToLibrary },
                 { label: 'Exportar', icon: <Download size={15} />, onClick: exportCurrent }
               ]}
             />
@@ -353,31 +354,28 @@ export function TournamentScreen() {
             <NarrationPanel
               summary={finished ? narrSummary : null}
               round={!finished ? roundHi : null}
-              onOpen={(id) => {
-                const m = t.matches.find((x) => x.id === id)
-                if (m) setSelectedMatch(m)
-              }}
+              onOpen={(id) => setSelectedMatchId(id)}
             />
             {t.format === 'league' && (
-              <LeagueView t={t} teams={teams} currentIds={roundInfo.matchIds} onSim={simMatch} onOpen={setSelectedMatch} />
+              <LeagueView t={t} teams={teams} currentIds={roundInfo.matchIds} onSim={simMatch} onOpen={(m) => setSelectedMatchId(m.id)} />
             )}
             {t.format === 'swiss' && (
-              <SwissView t={t} teams={teams} currentIds={roundInfo.matchIds} onSim={simMatch} onOpen={setSelectedMatch} />
+              <SwissView t={t} teams={teams} currentIds={roundInfo.matchIds} onSim={simMatch} onOpen={(m) => setSelectedMatchId(m.id)} />
             )}
             {t.format === 'cup' && (
-              <CupView t={t} teams={teams} currentIds={roundInfo.matchIds} onSim={simMatch} onOpen={setSelectedMatch} />
+              <CupView t={t} teams={teams} currentIds={roundInfo.matchIds} onSim={simMatch} onOpen={(m) => setSelectedMatchId(m.id)} />
             )}
             {(t.format === 'double-elim' || t.format === 'triple-elim') && (
-              <CupView t={t} teams={teams} currentIds={roundInfo.matchIds} onSim={simMatch} onOpen={setSelectedMatch} />
+              <CupView t={t} teams={teams} currentIds={roundInfo.matchIds} onSim={simMatch} onOpen={(m) => setSelectedMatchId(m.id)} />
             )}
             {t.format === 'groups' && (
-              <GroupsView t={t} teams={teams} currentIds={roundInfo.matchIds} onSim={simMatch} onOpen={setSelectedMatch} />
+              <GroupsView t={t} teams={teams} currentIds={roundInfo.matchIds} onSim={simMatch} onOpen={(m) => setSelectedMatchId(m.id)} />
             )}
             {t.format === 'league-playoffs' && t.phase === 'league' && (
-              <LeagueView t={t} teams={teams} currentIds={roundInfo.matchIds} onSim={simMatch} onOpen={setSelectedMatch} />
+              <LeagueView t={t} teams={teams} currentIds={roundInfo.matchIds} onSim={simMatch} onOpen={(m) => setSelectedMatchId(m.id)} />
             )}
             {t.format === 'league-playoffs' && t.phase !== 'league' && (
-              <CupView t={t} teams={teams} currentIds={roundInfo.matchIds} onSim={simMatch} onOpen={setSelectedMatch} />
+              <CupView t={t} teams={teams} currentIds={roundInfo.matchIds} onSim={simMatch} onOpen={(m) => setSelectedMatchId(m.id)} />
             )}
           </>
         )}
@@ -399,7 +397,11 @@ export function TournamentScreen() {
         home={selectedMatch ? teams[selectedMatch.homeId] : undefined}
         away={selectedMatch ? teams[selectedMatch.awayId] : undefined}
         sport={t.sport}
-        onClose={() => setSelectedMatch(null)}
+        bestOf={t.config.bestOf}
+        form={formMapOf(t)}
+        onClose={() => setSelectedMatchId(null)}
+        onSimulate={simMatch}
+        seedLabels={t.seedLabels}
       />
 
       <ConfirmDialog
@@ -763,7 +765,7 @@ function LeagueView({ t, teams, currentIds, onSim, onOpen }: ViewProps) {
       <div className="space-y-5">
         <div className="card p-4">
           <p className="mb-2 text-sm font-bold text-white">Classificação</p>
-          <StandingsTable rows={rows} teams={teams} sport={t.sport} form={formMapOf(t)} />
+          <StandingsTable rows={rows} teams={teams} sport={t.sport} form={formMapOf(t)} seedLabels={t.seedLabels} />
         </div>
       </div>
       <div>
@@ -861,7 +863,16 @@ function CupView({ t, teams, currentIds, onSim, onOpen }: ViewProps) {
 
       <div className="card p-5">
         <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">Chaveamento</p>
-        <Bracket bracket={t.bracket} matches={t.matches} teams={teams} sport={t.sport} champion={t.champion} onSimulate={onSim} onOpen={onOpen} />
+        <Bracket
+          bracket={t.bracket}
+          matches={t.matches}
+          teams={teams}
+          sport={t.sport}
+          champion={t.champion}
+          onSimulate={onSim}
+          onOpen={onOpen}
+          seedLabels={t.seedLabels}
+        />
       </div>
     </div>
   )
@@ -909,6 +920,7 @@ function GroupsView({ t, teams, currentIds, onSim, onOpen }: ViewProps) {
                   qualifyCount={t.config.qualifiersPerGroup}
                   compact
                   form={formMapOf(t)}
+                  seedLabels={t.seedLabels}
                 />
               </div>
             ))}

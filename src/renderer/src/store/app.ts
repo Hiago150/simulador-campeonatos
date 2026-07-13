@@ -13,9 +13,8 @@ import {
 } from '../engine/tournament'
 import { uid } from '../engine/rng'
 import { useHistory } from './history'
-import { useLibrary } from './library'
 
-export type Screen = 'home' | 'setup' | 'tournament' | 'history' | 'teams' | 'stats' | 'library' | 'season'
+export type Screen = 'home' | 'setup' | 'tournament' | 'history' | 'teams' | 'stats' | 'season'
 
 export interface CustomTeamInput {
   name: string
@@ -83,10 +82,6 @@ interface AppState {
 
   // narração: ids das partidas da última rodada simulada (para os destaques)
   lastRoundIds: string[]
-
-  // biblioteca local (vários campeonatos salvos)
-  saveCurrentToLibrary: () => void
-  loadFromLibrary: (t: Tournament) => void
 
   // revisão somente-leitura de um campeonato já concluído (ex.: slot de Temporada)
   reviewMode: boolean
@@ -220,37 +215,57 @@ export const useApp = create<AppState>()(
       simMatch: (matchId) => {
         const cur = get().current
         if (!cur) return
-        set({ current: simulateOne(cur, matchId), lastRoundIds: [matchId] })
+        try {
+          set({ current: simulateOne(cur, matchId), lastRoundIds: [matchId] })
+        } catch (err) {
+          console.error('Falha ao simular partida', err)
+          get().setToast('Não foi possível simular essa partida')
+        }
       },
 
       simRound: () => {
         const cur = get().current
         if (!cur) return
-        const ids = currentRoundInfo(cur).matchIds
-        set({ current: simulateRound(cur), lastRoundIds: ids })
+        try {
+          const ids = currentRoundInfo(cur).matchIds
+          set({ current: simulateRound(cur), lastRoundIds: ids })
+        } catch (err) {
+          console.error('Falha ao simular rodada', err)
+          get().setToast('Não foi possível simular essa rodada')
+        }
       },
 
       // simula a fase inteira atual (ex.: toda a fase de grupos de uma vez)
       simPhase: () => {
         const cur = get().current
         if (!cur) return
-        const startPhase = cur.phase
-        let nt = cur
-        let guard = 0
-        while (guard < 500) {
-          const info = currentRoundInfo(nt)
-          if (info.matchIds.length === 0) break
-          nt = simulateRound(nt)
-          if (nt.phase !== startPhase) break
-          guard++
+        try {
+          const startPhase = cur.phase
+          let nt = cur
+          let guard = 0
+          while (guard < 500) {
+            const info = currentRoundInfo(nt)
+            if (info.matchIds.length === 0) break
+            nt = simulateRound(nt)
+            if (nt.phase !== startPhase) break
+            guard++
+          }
+          set({ current: nt, lastRoundIds: [] })
+        } catch (err) {
+          console.error('Falha ao simular fase', err)
+          get().setToast('Não foi possível simular essa fase')
         }
-        set({ current: nt, lastRoundIds: [] })
       },
 
       simAll: () => {
         const cur = get().current
         if (!cur) return
-        set({ current: simulateAll(cur), lastRoundIds: [] })
+        try {
+          set({ current: simulateAll(cur), lastRoundIds: [] })
+        } catch (err) {
+          console.error('Falha ao simular tudo', err)
+          get().setToast('Não foi possível simular o campeonato inteiro')
+        }
       },
 
       // só quando não resta nada a simular: registra no histórico
@@ -310,20 +325,6 @@ export const useApp = create<AppState>()(
 
       closeTournament: () =>
         set({ current: null, screen: 'home', mcTarget: 0, mcDone: 0, mcTally: {}, lastRoundIds: [], reviewMode: false }),
-
-      saveCurrentToLibrary: () => {
-        const cur = get().current
-        if (!cur) return
-        useLibrary.getState().saveTournament(cur)
-        get().setToast('Campeonato salvo na biblioteca')
-      },
-
-      loadFromLibrary: (t) => {
-        // clona para desacoplar do snapshot persistido na biblioteca
-        const clone: Tournament = JSON.parse(JSON.stringify(t))
-        set({ current: clone, screen: 'tournament', reviewMode: false, mcTarget: 0, mcDone: 0, mcTally: {}, lastRoundIds: [] })
-        get().setToast('Campeonato carregado')
-      },
 
       viewTournament: (t) => {
         // revisão somente-leitura (ex.: campeonato já concluído de um ano da Temporada) —

@@ -38,6 +38,8 @@ export interface Team {
   color: string // cor primária (hex)
   logo?: string // emoji opcional; ausência => renderiza iniciais
   country?: string
+  /** região oficial do circuito (só franquias VCT hoje) — base dos potes por região na Temporada */
+  region?: 'americas' | 'emea' | 'pacific' | 'china'
   squad?: Player[] // gerado quando o torneio inicia
 }
 
@@ -66,6 +68,8 @@ export interface EsportsMap {
   name: string
   home: number // rounds vencidos
   away: number
+  /** mapa decidido na prorrogação (empate em 12-12 na regulamentação) */
+  overtime?: boolean
   /** KDA dos 10 jogadores neste mapa (partidas antigas não têm) */
   lines?: EsportsPlayerLine[]
 }
@@ -216,6 +220,10 @@ export interface Tournament {
   swiss?: SwissState
   /** ordem de chaveamento original (mata-mata) — usado para refazer */
   cupSeed?: (string | null)[]
+  /** posição de chegada de cada time (classificado via qualifiesFrom na Temporada) */
+  arrivals?: Record<string, { fromSlotId?: string; rank?: number }>
+  /** selo de seed pronto pra exibir (ex.: "EMEA #2", "#3") — snapshot da criação */
+  seedLabels?: Record<string, string>
   phase: TournamentPhase
   champion?: string // teamId quando encerrado
 }
@@ -319,6 +327,35 @@ export interface SeasonSlot {
    * fora do topo (ex.: offset 6, count 2 = 7º e 8º, vaga de Pré-Libertadores).
    */
   qualifiesFrom?: { slotId: string; count: number; offset?: number }[]
+  /**
+   * Rótulo de fase pra agrupar visualmente a sequência do ano no Hub da
+   * Temporada (ex.: "Kickoff", "Masters 1", "Stage 1"...) — opcional, só
+   * presets com muitos slots (tipo o VCT) usam isso.
+   */
+  phaseLabel?: string
+  /**
+   * Vagas extras por "consistência no ano" (média de colocação em vários
+   * slots anteriores, excluindo quem já veio de outra fonte) — mecanismo
+   * bem específico do preset VCT (2ª leva de vagas pra Champions), por isso
+   * não é um `qualifiesFrom` genérico. `count` vale por região.
+   */
+  vctConsistencyWildcards?: {
+    count: number
+    regions: {
+      kickoffSlotId: string
+      stage1SlotId: string
+      stage2PlayoffsSlotId: string
+      stage2PlayInsSlotId: string
+    }[]
+  }
+  /**
+   * Bye vindo do ANO ANTERIOR: os times deste slot que estiverem entre os
+   * melhores colocados de `fromSlotId` no ano passado (ex.: Champions)
+   * semeiam na frente aqui — mecanismo do preset VCT (Kickoff puxa bye de
+   * quem foi bem no Champions anterior). Sem efeito no 1º ano (não há
+   * "ano anterior" ainda).
+   */
+  previousYearBye?: { fromSlotId: string }
 }
 
 export interface SeasonScorerEntry {

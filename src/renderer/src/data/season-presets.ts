@@ -23,6 +23,15 @@ export interface SeasonPresetSlot {
    * `offset` (0-based) permite faixas fora do topo (ex.: 3º e 4º da liga).
    */
   qualifiesFrom?: { slot: number; count: number; offset?: number }[]
+  /** rótulo de fase pra agrupar a sequência no Hub (presets grandes, tipo VCT) */
+  phaseLabel?: string
+  /** vagas extras por consistência no ano — ver `SeasonSlot.vctConsistencyWildcards` */
+  vctConsistencyWildcards?: {
+    count: number
+    regions: { kickoff: number; stage1: number; stage2Playoffs: number; stage2PlayIns: number }[]
+  }
+  /** bye vindo do ano anterior — ver `SeasonSlot.previousYearBye` (índice do slot-fonte) */
+  previousYearBye?: { fromSlot: number }
 }
 
 export interface SeasonPreset {
@@ -103,6 +112,155 @@ const SUL_AMERICANA_SLOTS: SeasonPresetSlot[] = [
       { slot: 11, count: 1 }, // campeão da Libertadores
       { slot: 12, count: 1 }  // campeão da Champions
     ]
+  }
+]
+
+// VCT — circuito profissional completo (Kickoff → Masters 1 → Stage 1 →
+// Masters 2 → Stage 2 → Champions), as 4 ligas regionais rodando de verdade.
+// 25 campeonatos/ano — bem mais que os outros presets, por isso o Hub agrupa
+// a sequência por fase (`phaseLabel`). Ver notas técnicas na documentação do
+// projeto (Simulador - Modo Temporada) pra decisões de fidelidade x simplicidade.
+const VCT_AMERICAS_TEAMS = [
+  'hundred-thieves', 'cloud9', 'eg', 'furia', 'kru', 'leviatan', 'loud', 'mibr', 'nrg', 'sentinels', 'g2', 'envy'
+]
+const VCT_EMEA_TEAMS = [
+  'bbl-esports', 'fnatic', 'fut-esports', 'karmine', 'navi', 'heretics', 'liquid', 'vitality',
+  'giantx', 'm8', 'pcific', 'eternal-fire'
+]
+const VCT_PACIFIC_TEAMS = [
+  'detonation', 'drx', 'geng', 'global-esports', 'paper-rex', 'rrq', 't1', 'team-secret',
+  'zeta-division', 'full-sense', 'nongshim', 'varrel'
+]
+const VCT_CHINA_TEAMS = [
+  'all-gamers', 'bilibili-gaming', 'edg', 'funplus-phoenix', 'jd-gaming', 'nova-esports',
+  'titan-esports', 'trace-esports', 'tyloo', 'wolves-esports', 'dragon-ranger', 'xlg-esports'
+]
+const VCT_REGIONS = [
+  { label: 'Americas', teams: VCT_AMERICAS_TEAMS },
+  { label: 'EMEA', teams: VCT_EMEA_TEAMS },
+  { label: 'Pacific', teams: VCT_PACIFIC_TEAMS },
+  { label: 'China', teams: VCT_CHINA_TEAMS }
+]
+
+function vctMastersStage(
+  label: string,
+  sourceSlots: number[], // 4 slots-fonte (1 por região) desta rodada de qualificação
+  phaseLabel: string
+): SeasonPresetSlot[] {
+  return [
+    {
+      name: `${label} — Fase Classificatória`,
+      format: 'groups',
+      game: 'valorant',
+      config: { groupCount: 2, qualifiersPerGroup: 2, bestOf: 3 },
+      teamIds: [],
+      phaseLabel,
+      // 2º e 3º colocados de cada região (8 times, 2 grupos cruzados)
+      qualifiesFrom: sourceSlots.map((slot) => ({ slot, count: 2, offset: 1 }))
+    },
+    {
+      name: `${label} — Playoffs`,
+      format: 'double-elim',
+      game: 'valorant',
+      config: { bestOf: 3 },
+      teamIds: [],
+      phaseLabel,
+      qualifiesFrom: [
+        ...sourceSlots.map((slot) => ({ slot, count: 1 })), // 1º de cada região — bye direto
+        { slot: sourceSlots[sourceSlots.length - 1] + 1, count: 4 } // top-4 da fase classificatória (slot logo acima)
+      ]
+    }
+  ]
+}
+
+const VALORANT_SLOTS: SeasonPresetSlot[] = [
+  // ── Kickoff (0-3) — mata-mata tripla eliminação, todas as 12 franquias ──
+  ...VCT_REGIONS.map(
+    (r): SeasonPresetSlot => ({
+      name: `VCT ${r.label} — Kickoff`,
+      format: 'triple-elim',
+      game: 'valorant',
+      config: { bestOf: 3 },
+      teamIds: r.teams,
+      phaseLabel: 'Kickoff',
+      // a partir do 2º ano, os 4 representantes da região no Champions
+      // anterior entram com vantagem de semeadura (viram o bye ao completar
+      // a chave até 16); sem efeito no 1º ano (não há Champions anterior)
+      previousYearBye: { fromSlot: 24 }
+    })
+  ),
+  // ── Masters 1 (4-5) — 12 times: bye pros líderes do Kickoff + classificatória ──
+  ...vctMastersStage('Masters 1', [0, 1, 2, 3], 'Masters 1'),
+  // ── Stage 1 (6-9) — grupos + playoffs (top-4/grupo), todas as 12 franquias ──
+  ...VCT_REGIONS.map(
+    (r): SeasonPresetSlot => ({
+      name: `VCT ${r.label} — Stage 1`,
+      format: 'groups',
+      game: 'valorant',
+      config: { groupCount: 2, qualifiersPerGroup: 4, bestOf: 3 },
+      teamIds: r.teams,
+      phaseLabel: 'Stage 1'
+    })
+  ),
+  // ── Masters 2 (10-11) — mesmo molde do Masters 1, agora a partir do Stage 1 ──
+  ...vctMastersStage('Masters 2', [6, 7, 8, 9], 'Masters 2'),
+  // ── Stage 2 (12-23) — grupos, depois Play-Ins e Playoffs, por região ──
+  ...VCT_REGIONS.map(
+    (r): SeasonPresetSlot => ({
+      name: `VCT ${r.label} — Stage 2 · Grupos`,
+      format: 'groups',
+      game: 'valorant',
+      config: { groupCount: 2, qualifiersPerGroup: 2, bestOf: 3 },
+      teamIds: r.teams,
+      phaseLabel: 'Stage 2'
+    })
+  ),
+  ...VCT_REGIONS.map(
+    (r, i): SeasonPresetSlot => ({
+      name: `VCT ${r.label} — Stage 2 · Play-Ins`,
+      format: 'double-elim',
+      game: 'valorant',
+      config: { bestOf: 3 },
+      teamIds: [],
+      phaseLabel: 'Stage 2',
+      // os 4 que fizeram o mini-mata-mata do top-2/grupo ficam nas 4 primeiras
+      // posições da classificação (índices 0-3); os outros 8 (3º-6º de cada
+      // grupo) vêm em seguida, ordenados só pela posição no grupo
+      qualifiesFrom: [{ slot: 12 + i, count: 8, offset: 4 }]
+    })
+  ),
+  ...VCT_REGIONS.map(
+    (r, i): SeasonPresetSlot => ({
+      name: `VCT ${r.label} — Stage 2 · Playoffs`,
+      format: 'cup',
+      game: 'valorant',
+      config: { bestOf: 3 },
+      teamIds: [],
+      phaseLabel: 'Stage 2',
+      qualifiesFrom: [
+        { slot: 12 + i, count: 4 }, // top-2/grupo direto (4)
+        { slot: 16 + i, count: 4 } // sobreviventes dos Play-Ins (4)
+      ]
+    })
+  ),
+  // ── Champions (24) — 16 times: 2 finalistas do Stage 2 + 2 por consistência, por região ──
+  {
+    name: 'VCT Champions',
+    format: 'groups',
+    game: 'valorant',
+    config: { groupCount: 4, qualifiersPerGroup: 2, bestOf: 3 },
+    teamIds: [],
+    phaseLabel: 'Champions',
+    qualifiesFrom: [20, 21, 22, 23].map((slot) => ({ slot, count: 2 })), // finalistas do Stage 2 Playoffs
+    vctConsistencyWildcards: {
+      count: 2,
+      regions: [0, 1, 2, 3].map((kickoff, i) => ({
+        kickoff,
+        stage1: 6 + i,
+        stage2Playoffs: 20 + i,
+        stage2PlayIns: 16 + i
+      }))
+    }
   }
 ]
 
@@ -196,8 +354,9 @@ export const SEASON_PRESETS: SeasonPreset[] = [
   {
     id: 'sea-valorant', label: 'Temporada Valorant', emoji: '🎯', sport: 'esports', game: 'valorant',
     group: 'E-sports', period: 10,
-    description: 'VCT Champions + VCT Masters, todo ano.',
-    slots: [fromChamp('vct-champions'), fromChamp('vct-masters')]
+    description:
+      'Circuito completo: Kickoff → Masters 1 → Stage 1 → Masters 2 → Stage 2 → Champions, nas 4 ligas regionais. 25 campeonatos por ano.',
+    slots: VALORANT_SLOTS
   }
 ]
 

@@ -21,6 +21,7 @@ export interface PlaybackEvent {
     | 'penalties'
     | 'map-start'
     | 'map-hot'
+    | 'map-ot'
     | 'map-end'
     | 'ace'
     | 'clutch'
@@ -173,12 +174,20 @@ export function esportsTimeline(m: Match, teams: Record<string, Team>): Playback
       })
     }
     // mapa apertado (dois lados com 11+ rounds) = clutch, igual aos Lances
-    if (Math.min(mp.home, mp.away) >= 11) {
+    if (Math.min(mp.home, mp.away) >= 11 && !mp.overtime) {
       events.push({
         at: base + 7,
         kind: 'clutch',
         highlight: 'ace',
         text: `Clutch! ${mp.name} decidido no detalhe`
+      })
+    }
+    if (mp.overtime) {
+      events.push({
+        at: base + 7,
+        kind: 'map-ot',
+        highlight: 'decisive',
+        text: `${mp.name} foi para a prorrogação`
       })
     }
     const homeWon = mp.home > mp.away

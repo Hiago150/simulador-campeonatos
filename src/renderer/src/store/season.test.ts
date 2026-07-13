@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { useSeasons, resolveSlotTeamIds } from './season'
+import { useSeasons, resolveSlotTeamIds, resolveSlotArrivals } from './season'
 import { createTournament, simulateAll } from '../engine/tournament'
 import { baseConfig, mkTeams } from '../test/fixtures'
 import type { SeasonSlot } from '../types'
@@ -88,5 +88,50 @@ describe('recordSlotResult — guarda o campeonato completo pra revisão', () =>
     expect(y2.tournaments?.liga).toBeDefined()
     expect(y1.tournaments!.liga.id).not.toBe(y2.tournaments!.liga.id)
     expect(final.status).toBe('completed')
+  })
+})
+
+describe('resolveSlotArrivals — posição de chegada por time', () => {
+  const slot: SeasonSlot = {
+    id: 'x',
+    name: 'X',
+    format: 'cup',
+    config: {} as SeasonSlot['config'],
+    teamIds: ['fixo1', 'fixo2'],
+    qualifiesFrom: [
+      { slotId: 'liga', count: 2 },
+      { slotId: 'pre', count: 2, offset: 2 }
+    ]
+  }
+  const rankings = { liga: ['l1', 'l2', 'l3'], pre: ['p1', 'p2', 'p3', 'p4', 'p5'] }
+
+  it('elenco fixo não tem origem/rank; classificados carregam slot de origem e rank 1-based', () => {
+    const arrivals = resolveSlotArrivals(slot, rankings)
+    expect(arrivals).toEqual([
+      { teamId: 'fixo1' },
+      { teamId: 'fixo2' },
+      { teamId: 'l1', fromSlotId: 'liga', rank: 1 },
+      { teamId: 'l2', fromSlotId: 'liga', rank: 2 },
+      { teamId: 'p3', fromSlotId: 'pre', rank: 3 },
+      { teamId: 'p4', fromSlotId: 'pre', rank: 4 }
+    ])
+  })
+
+  it('resolveSlotTeamIds continua idêntico (mesma ordem/dedup), só que via resolveSlotArrivals', () => {
+    expect(resolveSlotTeamIds(slot, rankings)).toEqual(['fixo1', 'fixo2', 'l1', 'l2', 'p3', 'p4'])
+    // dedup: time já fixo não duplica mesmo se também aparecer classificado
+    const dupSlot = { ...slot, teamIds: ['l1'] }
+    expect(resolveSlotTeamIds(dupSlot, rankings)).toEqual(['l1', 'l2', 'p3', 'p4'])
+    expect(resolveSlotArrivals(dupSlot, rankings).find((a) => a.teamId === 'l1')).toEqual({ teamId: 'l1' })
+  })
+
+  it('ignora com segurança fonte ainda não concluída no ano', () => {
+    expect(resolveSlotArrivals(slot, { liga: rankings.liga })).toEqual([
+      { teamId: 'fixo1' },
+      { teamId: 'fixo2' },
+      { teamId: 'l1', fromSlotId: 'liga', rank: 1 },
+      { teamId: 'l2', fromSlotId: 'liga', rank: 2 }
+    ])
+    expect(resolveSlotArrivals(slot, undefined)).toEqual([{ teamId: 'fixo1' }, { teamId: 'fixo2' }])
   })
 })

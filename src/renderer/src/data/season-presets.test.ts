@@ -106,6 +106,93 @@ describe('preset Circuito Sul-Americano — pirâmide completa', () => {
   })
 })
 
+// Índices fixos do preset VCT (ver data/season-presets.ts): Kickoff 0-3,
+// Masters 1 (classificatória/playoffs) 4-5, Stage 1 6-9, Masters 2 10-11,
+// Stage 2 grupos/play-ins/playoffs 12-23, Champions 24.
+describe('preset Temporada Valorant — circuito completo (Kickoff→Champions)', () => {
+  const p = preset('sea-valorant')
+  const slots = buildSlots(p)
+  const rankings: Record<string, string[]> = {}
+  for (const s of slots) if (s.teamIds) rankings[s.id] = [...s.teamIds]
+
+  it('todos os ids dos slots existem na base de times e têm region', () => {
+    const known = new Map(PRESET_TEAMS.map((t) => [t.id, t]))
+    for (const sl of p.slots) {
+      for (const id of sl.teamIds) {
+        const team = known.get(id)
+        expect(team, id).toBeTruthy()
+        expect(team!.region, id).toBeTruthy()
+      }
+    }
+  })
+
+  it('tem 25 campeonatos no ano', () => {
+    expect(slots).toHaveLength(25)
+  })
+
+  it('Kickoff (0-3): tripla eliminação, 12 franquias por região, sem sobreposição', () => {
+    const kickoffs = slots.slice(0, 4)
+    expect(kickoffs.every((s) => s.format === 'triple-elim' && s.teamIds?.length === 12)).toBe(true)
+    const allIds = kickoffs.flatMap((s) => s.teamIds!)
+    expect(new Set(allIds).size).toBe(48)
+  })
+
+  it('Stage 1 (6-9) e Stage 2 · Grupos (12-15) usam o mesmo elenco do Kickoff da região', () => {
+    for (let i = 0; i < 4; i++) {
+      expect(new Set(slots[6 + i].teamIds)).toEqual(new Set(slots[i].teamIds))
+      expect(new Set(slots[12 + i].teamIds)).toEqual(new Set(slots[i].teamIds))
+    }
+  })
+
+  it('Masters 1 — Fase Classificatória (4): 2º e 3º de cada Kickoff (8 times)', () => {
+    const ids = resolveSlotTeamIds(slots[4], rankings)
+    expect(ids).toHaveLength(8)
+    for (const ko of slots.slice(0, 4)) {
+      expect(ids).toContain(ko.teamIds![1])
+      expect(ids).toContain(ko.teamIds![2])
+      expect(ids).not.toContain(ko.teamIds![0])
+    }
+  })
+
+  it('Masters 1 — Playoffs (5): 1º de cada Kickoff (bye) + top-4 da fase classificatória (8 times)', () => {
+    const classifierRanking = resolveSlotTeamIds(slots[4], rankings)
+    rankings[slots[4].id] = classifierRanking
+    const ids = resolveSlotTeamIds(slots[5], rankings)
+    expect(ids).toHaveLength(8)
+    for (const ko of slots.slice(0, 4)) expect(ids).toContain(ko.teamIds![0])
+    // top-4 da classificação da fase classificatória (as 4 primeiras posições)
+    for (const qualifier of classifierRanking.slice(0, 4)) expect(ids).toContain(qualifier)
+  })
+
+  it('Stage 2 · Play-Ins (16-19): quem não fez o top-2/grupo (8 times, sem os 4 diretos)', () => {
+    const groupsSlot = slots[12]
+    const ids = resolveSlotTeamIds(slots[16], rankings)
+    expect(ids).toHaveLength(8)
+    // as 4 primeiras posições da classificação são de quem fez o top-2/grupo
+    // (foram pro mini-mata-mata) — essas NÃO vão pro Play-In
+    for (const direct of groupsSlot.teamIds!.slice(0, 4)) expect(ids).not.toContain(direct)
+    expect(ids).toContain(groupsSlot.teamIds![4])
+  })
+
+  it('Stage 2 · Playoffs (20-23): top-2/grupo direto + 4 sobreviventes dos Play-Ins (8 times)', () => {
+    rankings[slots[16].id] = resolveSlotTeamIds(slots[16], rankings)
+    const ids = resolveSlotTeamIds(slots[20], rankings)
+    expect(ids).toHaveLength(8)
+    expect(ids).toContain(slots[12].teamIds![0])
+    expect(ids).toContain(slots[12].teamIds![1])
+  })
+
+  it('VCT Champions (24): qualifiesFrom direto traz 2 finalistas de cada Stage 2 Playoffs (8 times)', () => {
+    for (let i = 0; i < 4; i++) rankings[slots[20 + i].id] = resolveSlotTeamIds(slots[20 + i], rankings)
+    const champions = slots[24]
+    const ids = resolveSlotTeamIds(champions, rankings)
+    expect(ids).toHaveLength(8) // resolveSlotTeamIds só resolve o qualifiesFrom genérico —
+    // as outras 8 vagas (2 por região "por consistência") são um mecanismo à parte do preset,
+    // resolvido em Season.tsx (ver season-vct.test.ts)
+    expect(champions.config.groupCount).toBe(4)
+  })
+})
+
 describe('preset Eliminatórias & Copa América', () => {
   const p = preset('sea-eliminatorias')
   const slots = buildSlots(p)

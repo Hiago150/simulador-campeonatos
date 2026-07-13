@@ -191,6 +191,61 @@ const MAP_POOLS: Record<EsportsGame, string[]> = {
   valorant: ['Ascent', 'Bind', 'Haven', 'Split', 'Lotus', 'Sunset', 'Icebox', 'Breeze', 'Abyss']
 }
 
+/** amostra de rounds vencidos pelo mandante em `n` rounds, cada um com prob. `p` */
+function binomialSample(n: number, p: number): number {
+  let k = 0
+  for (let i = 0; i < n; i++) if (Math.random() < p) k++
+  return k
+}
+
+/**
+ * Prorrogação do Valorant (regra oficial): parciais de 2 rounds (1 ataque +
+ * 1 defesa) repetidos até alguém abrir 2 rounds de vantagem. Resolvido por
+ * renovação (sem loop de round a round): cada parcial termina de forma
+ * decisiva com prob. `p²+(1-p)²`; o vencedor do parcial decisivo sai da
+ * probabilidade condicional `p²/(p²+(1-p)²)`. O nº de parciais empatados
+ * antes do decisivo é sorteado (limitado a 5, pra manter placares plausíveis
+ * tipo 15-13/19-17). Retorna só os rounds ganhos NA prorrogação (somar à
+ * base de 12 de cada lado).
+ */
+function resolveValorantOT(pRound: number): { home: number; away: number } {
+  const pContinue = 2 * pRound * (1 - pRound)
+  let splits = 0
+  while (Math.random() < pContinue && splits < 5) splits++
+  const pHomeDecisive = pRound ** 2 / (pRound ** 2 + (1 - pRound) ** 2)
+  const homeWinsDecisive = Math.random() < pHomeDecisive
+  return homeWinsDecisive ? { home: splits + 2, away: splits } : { home: splits, away: splits + 2 }
+}
+
+/**
+ * Prorrogação do CS2 (regra oficial): parciais de 6 rounds (3 terrorista +
+ * 3 contraterrorista); quem fizer 4 primeiro fecha o parcial; 3-3 repete
+ * outro parcial. Cada parcial é um binomial(6, p); parcial decisivo por
+ * rejection-sampling (redesenha se cair em 3-3) — mesmo resultado que
+ * derivar o binomial condicional na mão, mais simples. Limitado a 3
+ * parciais empatados antes do 4º forçar uma decisão (evita loop infinito
+ * em casos extremos). Retorna só os rounds da prorrogação.
+ */
+function resolveCS2OT(pRound: number): { home: number; away: number } {
+  const maxFrames = 4
+  let home = 0
+  let away = 0
+  for (let frame = 0; frame < maxFrames; frame++) {
+    let k = binomialSample(6, pRound)
+    if (frame === maxFrames - 1) {
+      let attempts = 0
+      while (k === 3 && attempts < 30) {
+        k = binomialSample(6, pRound)
+        attempts++
+      }
+    }
+    if (k !== 3) return { home: home + k, away: away + (6 - k) }
+    home += 3
+    away += 3
+  }
+  return { home: home + 3, away: away + 3 } // inatingível — o último parcial força decisão
+}
+
 /** reparte `total` entre pesos preservando a soma exata (maiores restos ganham +1) */
 function distribute(total: number, weights: number[]): number[] {
   const sumW = weights.reduce((s, w) => s + w, 0) || 1
@@ -298,21 +353,32 @@ function simulateEsports(home: Team, away: Team, ctx: SimContext): Partial<Match
   const awayForm = rollSeriesForm(away)
   let mi = 0
   while (hMaps < needed && aMaps < needed) {
-    const homeWins = Math.random() < pHomeMap
-    // placar do mapa: vencedor 13; perdedor cai conforme a dominância do vencedor
-    // (times muito favoritos => resultados mais elásticos; equilíbrio/zebra => acirrado)
-    const winnerStr = homeWins ? sH : sA
-    const loserStr = homeWins ? sA : sH
-    const gap = blend(winnerStr - loserStr, 0, ctx.chaos)
-    const loserRounds = clamp(Math.round(11 - gap * 0.26 + randInt(-3, 2)), 1, 11)
-    const mp: EsportsMap = {
-      name: pool[mi % pool.length],
-      home: homeWins ? 13 : loserRounds,
-      away: homeWins ? loserRounds : 13
+    // chance real de terminar empatado em 12-12 na regulamentação — maior
+    // quanto mais parelho o confronto, ~zero em jogos de goleada
+    const pTie = clamp(0.3 * (1 - 4 * (pHomeMap - 0.5) ** 2), 0, 0.3)
+    let mp: EsportsMap
+    if (Math.random() < pTie) {
+      // pHomeMap reaproveitado como proxy de prob. por round na prorrogação
+      // (o motor não modela round a round fora da OT)
+      const ot = ctx.game === 'valorant' ? resolveValorantOT(pHomeMap) : resolveCS2OT(pHomeMap)
+      mp = { name: pool[mi % pool.length], home: 12 + ot.home, away: 12 + ot.away, overtime: true }
+    } else {
+      const homeWins = Math.random() < pHomeMap
+      // placar do mapa: vencedor 13; perdedor cai conforme a dominância do vencedor
+      // (times muito favoritos => resultados mais elásticos; equilíbrio/zebra => acirrado)
+      const winnerStr = homeWins ? sH : sA
+      const loserStr = homeWins ? sA : sH
+      const gap = blend(winnerStr - loserStr, 0, ctx.chaos)
+      const loserRounds = clamp(Math.round(11 - gap * 0.26 + randInt(-3, 2)), 1, 11)
+      mp = {
+        name: pool[mi % pool.length],
+        home: homeWins ? 13 : loserRounds,
+        away: homeWins ? loserRounds : 13
+      }
     }
     mp.lines = mapKda(home, away, mp, ctx.chaos, homeForm, awayForm)
     maps.push(mp)
-    if (homeWins) hMaps++
+    if (mp.home > mp.away) hMaps++
     else aMaps++
     mi++
   }

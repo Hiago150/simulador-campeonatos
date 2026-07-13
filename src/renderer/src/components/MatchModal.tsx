@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { motion } from 'framer-motion'
-import type { Match, Sport, Team } from '../types'
-import { Modal } from './ui'
+import type { BestOf, Match, Sport, Team } from '../types'
+import { Modal, StrengthBar } from './ui'
 import { TeamBadge } from './TeamBadge'
 import { cx } from '../lib/cx'
 import { matchMoments, esportsHighlightOptions, type Moment } from '../lib/narration'
 import { matchTimeline, type PlaybackEvent } from '../engine/playback'
 import {
-  Check, Copy, Crosshair, Flame, Goal, Hand, Info, Map as MapIcon, Pause, Play,
-  Share2, Square, Star, Target, X, Zap
+  Check, Copy, Crosshair, Dices, Flame, Goal, Hand, Info, Map as MapIcon, Pause, Play,
+  Share2, Square, Star, Target, TrendingDown, TrendingUp, X, Zap
 } from 'lucide-react'
 
 /** ícone do lance: destaques ganham cor de acento (verde = brilho, vermelho = decisivo) */
@@ -60,6 +60,7 @@ function PlaybackIcon({ ev }: { ev: PlaybackEvent }) {
     case 'mvp':
       return <Crosshair size={15} className="shrink-0 text-gold-400" />
     case 'penalties':
+    case 'map-ot':
       return <Flame size={15} className="shrink-0 text-blood-400" />
     default:
       return <Info size={15} className="shrink-0 text-zinc-500" />
@@ -392,20 +393,74 @@ export function MatchModal({
   home,
   away,
   sport,
-  onClose
+  bestOf,
+  form,
+  onClose,
+  onSimulate,
+  seedLabels
 }: {
   match: Match | null
   home?: Team
   away?: Team
   sport: Sport
+  /** melhor-de-X — só faz sentido pra e-sports; usado na prévia antes de simular */
+  bestOf?: BestOf
+  /** forma (embalado/má fase) por time — opcional, mesma fonte da classificação */
+  form?: Record<string, 'hot' | 'cold' | null>
   onClose: () => void
+  /** simula a partida sem sair do modal — usado pelos botões da prévia */
+  onSimulate?: (matchId: string) => void
+  /** selo de seed (ex.: "EMEA #2") — opcional, visível só aqui no detalhe da partida */
+  seedLabels?: Record<string, string>
 }) {
-  const open = !!match && match.played
+  const open = !!match
   const [watching, setWatching] = useState(false)
+  // "Assistir" clicado antes de simular: dispara a simulação e entra no replay
+  // assim que o resultado ficar pronto (match.played vira true no próximo render)
+  const [pendingWatch, setPendingWatch] = useState(false)
+
   // replay fecha junto com o modal / troca de partida
   useEffect(() => {
-    if (!open) setWatching(false)
+    if (!open) {
+      setWatching(false)
+      setPendingWatch(false)
+    }
   }, [open, match?.id])
+
+  useEffect(() => {
+    if (pendingWatch && match?.played) {
+      setWatching(true)
+      setPendingWatch(false)
+    }
+  }, [pendingWatch, match?.played])
+
+  const handleWatch = () => {
+    if (!match) return
+    if (match.played) {
+      setWatching(true)
+    } else {
+      setPendingWatch(true)
+      onSimulate?.(match.id)
+    }
+  }
+
+  if (match && !match.played) {
+    return (
+      <Modal open={open} onClose={onClose} maxWidth="max-w-lg">
+        <MatchPreview
+          match={match}
+          home={home}
+          away={away}
+          sport={sport}
+          bestOf={bestOf}
+          form={form}
+          seedLabels={seedLabels}
+          onWatch={handleWatch}
+          onSimulate={() => onSimulate?.(match.id)}
+        />
+      </Modal>
+    )
+  }
 
   if (match && watching && (match.football || match.esports)) {
     return (
@@ -426,7 +481,7 @@ export function MatchModal({
             </p>
             <div className="flex items-center justify-between gap-3">
               <div className="flex flex-1 flex-col items-center gap-2">
-                <TeamBadge team={home} size="lg" />
+                <TeamBadge team={home} size="lg" seedLabel={home && seedLabels?.[home.id]} />
                 <span className="text-center text-sm font-semibold text-zinc-200">{home?.name}</span>
               </div>
               <div className="flex flex-col items-center px-2">
@@ -443,14 +498,14 @@ export function MatchModal({
                 )}
               </div>
               <div className="flex flex-1 flex-col items-center gap-2">
-                <TeamBadge team={away} size="lg" />
+                <TeamBadge team={away} size="lg" seedLabel={away && seedLabels?.[away.id]} />
                 <span className="text-center text-sm font-semibold text-zinc-200">{away?.name}</span>
               </div>
             </div>
             {(match.football || match.esports) && (
               <div className="mt-4 flex justify-center">
                 <button
-                  onClick={() => setWatching(true)}
+                  onClick={handleWatch}
                   className="flex items-center gap-2 rounded-full border border-blood-600/60 bg-blood-950/40 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-blood-200 transition hover:bg-blood-900/40"
                 >
                   <Play size={13} /> Assistir
@@ -477,6 +532,97 @@ export function MatchModal({
         </div>
       )}
     </Modal>
+  )
+}
+
+// ─────────────────────────── Prévia (antes de simular) ───────────────────────────
+
+function TeamStrengthRow({ team, form }: { team?: Team; form?: Record<string, 'hot' | 'cold' | null> }) {
+  if (!team) return <span className="text-xs text-zinc-600">A definir</span>
+  const f = form?.[team.id]
+  return (
+    <div className="min-w-0">
+      <div className="mb-1 flex items-center gap-1.5">
+        <span className="truncate text-xs font-semibold text-zinc-300">{team.name}</span>
+        {f === 'hot' && <TrendingUp size={12} className="shrink-0 text-win-400" aria-label="Embalado" />}
+        {f === 'cold' && <TrendingDown size={12} className="shrink-0 text-blood-400" aria-label="Má fase" />}
+      </div>
+      <StrengthBar value={team.strength} />
+    </div>
+  )
+}
+
+function MatchPreview({
+  match,
+  home,
+  away,
+  sport,
+  bestOf,
+  form,
+  seedLabels,
+  onWatch,
+  onSimulate
+}: {
+  match: Match
+  home?: Team
+  away?: Team
+  sport: Sport
+  bestOf?: BestOf
+  form?: Record<string, 'hot' | 'cold' | null>
+  seedLabels?: Record<string, string>
+  onWatch: () => void
+  onSimulate: () => void
+}) {
+  return (
+    <div className="px-6 py-6">
+      <p className="mb-4 text-center text-xs font-semibold uppercase tracking-widest text-zinc-500">
+        {match.stage} · a decidir
+      </p>
+      <div className="flex items-center justify-center gap-3">
+        <div className="flex flex-1 flex-col items-center gap-2">
+          <TeamBadge team={home} size="lg" seedLabel={home && seedLabels?.[home.id]} />
+          <span className="text-center text-sm font-semibold text-zinc-200">{home?.name ?? 'A definir'}</span>
+        </div>
+        <span className="heading px-1 text-xl font-bold text-zinc-700">vs</span>
+        <div className="flex flex-1 flex-col items-center gap-2">
+          <TeamBadge team={away} size="lg" seedLabel={away && seedLabels?.[away.id]} />
+          <span className="text-center text-sm font-semibold text-zinc-200">{away?.name ?? 'A definir'}</span>
+        </div>
+      </div>
+
+      <div className="mt-5 rounded-xl border border-white/5 bg-ink-900/60 px-4 py-3">
+        <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Força</p>
+        <div className="grid grid-cols-2 gap-4">
+          <TeamStrengthRow team={home} form={form} />
+          <TeamStrengthRow team={away} form={form} />
+        </div>
+      </div>
+
+      {sport === 'esports' && bestOf && (
+        <p className="mt-3 text-center text-[11px] text-zinc-600">
+          Melhor de {bestOf} — os mapas saem ao simular ou assistir.
+        </p>
+      )}
+
+      {!home || !away ? (
+        <p className="mt-5 text-center text-xs text-zinc-600">Times ainda não definidos.</p>
+      ) : (
+        <div className="mt-5 flex justify-center gap-3">
+          <button
+            onClick={onWatch}
+            className="flex items-center gap-2 rounded-full border border-blood-600/60 bg-blood-950/40 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-blood-200 transition hover:bg-blood-900/40"
+          >
+            <Play size={13} /> Assistir
+          </button>
+          <button
+            onClick={onSimulate}
+            className="flex items-center gap-2 rounded-full bg-blood-grad px-4 py-2 text-xs font-bold uppercase tracking-wide text-white shadow-glow-sm transition hover:brightness-110"
+          >
+            <Dices size={13} /> Simular
+          </button>
+        </div>
+      )}
+    </div>
   )
 }
 

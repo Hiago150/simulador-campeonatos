@@ -84,4 +84,24 @@ describe('esportsTimeline — replay por mapa (nunca por round)', () => {
       for (let i = 1; i < a.events.length; i++) expect(a.events[i].at).toBeGreaterThanOrEqual(a.events[i - 1].at)
     }
   })
+
+  it('mapa de prorrogação gera um evento map-ot decisivo antes do map-end', () => {
+    // roda vários torneios até achar um mapa de prorrogação de verdade
+    let found = false
+    for (let round = 0; round < 15 && !found; round++) {
+      const { matches: ms, teams: tm } = playedMatches('esports')
+      for (const m of ms) {
+        const otIndex = m.esports!.maps.findIndex((mp) => mp.overtime)
+        if (otIndex < 0) continue
+        found = true
+        const { events } = esportsTimeline(m, tm)
+        const ot = events.find((e) => e.kind === 'map-ot')
+        expect(ot).toBeTruthy()
+        expect(ot!.highlight).toBe('decisive')
+        const end = events.filter((e) => e.kind === 'map-end')[otIndex]
+        expect(ot!.at).toBeLessThan(end.at)
+      }
+    }
+    expect(found).toBe(true)
+  })
 })

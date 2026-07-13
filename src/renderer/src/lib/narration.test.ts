@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { matchMoments, roundHighlights, esportsHighlightOptions } from './narration'
 import { createTournament, simulateAll } from '../engine/tournament'
 import { baseConfig, mkTeams } from '../test/fixtures'
-import type { Goal, Match, Team } from '../types'
+import type { EsportsMap, Goal, Match, Team } from '../types'
 
 const team = (id: string, strength: number): Team => ({
   id,
@@ -217,5 +217,49 @@ describe('esportsHighlightOptions — resumo para compartilhar', () => {
       }
     }
     expect(sawAce).toBe(true) // em ~8 torneios de BO5, algum mapa deve ter ace
+  })
+})
+
+describe('prorrogação — destaque narrativo sem emoji', () => {
+  function esportsMatch(maps: EsportsMap[]): Match {
+    return {
+      id: 'e1',
+      round: 1,
+      stage: 'R1',
+      homeId: 'home',
+      awayId: 'away',
+      played: true,
+      homeScore: maps.filter((mp) => mp.home > mp.away).length,
+      awayScore: maps.filter((mp) => mp.home < mp.away).length,
+      esports: {
+        bestOf: 3,
+        maps,
+        mvp: { playerId: 'p1', name: 'Top', teamId: 'home', kills: 20, deaths: 5, assists: 3 },
+        lines: [],
+        totalKills: [0, 0]
+      }
+    } as Match
+  }
+
+  it('mapa de prorrogação vira momento decisivo, sem emoji no texto', () => {
+    const teams = { home: team('home', 80), away: team('away', 80) }
+    const m = esportsMatch([{ name: 'Ascent', home: 15, away: 13, overtime: true }])
+    const moments = matchMoments(m, teams)
+    const mapMoment = moments.find((mo) => mo.text.includes('Ascent'))
+    expect(mapMoment).toBeTruthy()
+    expect(mapMoment!.highlight).toBe('decisive')
+    expect(mapMoment!.text).toContain('prorrogação')
+    // eslint-disable-next-line no-control-regex
+    const emojiRange = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u
+    expect(emojiRange.test(mapMoment!.text)).toBe(false)
+  })
+
+  it('resumo para compartilhar cita a prorrogação em texto plano', () => {
+    const teams = { home: team('home', 80), away: team('away', 80) }
+    const m = esportsMatch([{ name: 'Bind', home: 12, away: 14, overtime: true }])
+    const options = esportsHighlightOptions(m, teams)
+    const otOption = options.find((t) => t.includes('prorrogação'))
+    expect(otOption).toBeTruthy()
+    expect(otOption).toContain('Bind')
   })
 })

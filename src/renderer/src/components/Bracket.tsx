@@ -12,6 +12,8 @@ interface Props {
   onOpen: (match: Match) => void
   /** campeão já conhecido (dupla/tripla eliminação: a última rodada pode ficar sem vencedor) */
   champion?: string
+  /** selo de seed por time (ex.: "EMEA #2") — opcional, só quando o campeonato tem essa informação */
+  seedLabels?: Record<string, string>
 }
 
 function Row({
@@ -59,7 +61,7 @@ function BracketCard({
   teams,
   onSimulate,
   onOpen
-}: Omit<Props, 'bracket' | 'sport'> & { bm: BracketMatch }) {
+}: Omit<Props, 'bracket' | 'sport' | 'seedLabels'> & { bm: BracketMatch }) {
   const find = (id: string): Match | undefined => matches.find((m) => m.id === id)
   const twoLeg = !!(bm.legIds && bm.legIds.length === 2)
   const leg1 = twoLeg ? find(bm.legIds![0]) : undefined
@@ -90,7 +92,7 @@ function BracketCard({
     const voltaTxt = leg2?.played ? `${leg2.homeScore}-${leg2.awayScore}` : '–'
     if (leg1?.played || leg2?.played) legsLabel = `Ida ${idaTxt} · Volta ${voltaTxt}`
     penalties = leg2?.penalties
-    openMatch = leg2?.played ? leg2 : leg1?.played ? leg1 : undefined
+    openMatch = leg2?.played ? leg2 : leg1?.played ? leg1 : (leg1 ?? leg2)
     nextToSim = leg1 && !leg1.played ? leg1.id : leg2 && !leg2.played ? leg2.id : undefined
   } else {
     played = !!single?.played
@@ -148,18 +150,73 @@ const SECTION_LABEL: Record<string, string> = {
   gf: 'Grande final'
 }
 
-export function Bracket({ bracket, matches, teams, sport, onSimulate, onOpen, champion: championProp }: Props) {
+// Alinhamento em funil (só mata-mata simples, sem ressorteio): a rodada
+// seguinte fica centralizada no meio do par que a alimenta, dobrando o gap
+// horizontal a cada geração — sem medir nada via DOM, só com a largura fixa
+// do card (w-40) e o gap base de hoje (gap-3).
+const CARD_W = 160
+const BASE_GAP = 12
+
+function gapForGen(gen: number): number {
+  return (2 ** gen - 1) * CARD_W + 2 ** gen * BASE_GAP
+}
+
+/** "Cotovelo" do conector: une um par de cards na rodada de baixo. */
+function PairConnector({ gap }: { gap: number }) {
+  const leftCenter = CARD_W / 2
+  const rightCenter = CARD_W + gap + CARD_W / 2
+  const mid = (2 * CARD_W + gap) / 2
+  return (
+    <div className="relative h-6 shrink-0" style={{ width: 2 * CARD_W + gap }}>
+      <span className="absolute top-0 h-1/2 w-px bg-blood-500/60" style={{ left: leftCenter }} />
+      <span className="absolute top-0 h-1/2 w-px bg-blood-500/60" style={{ left: rightCenter }} />
+      <span
+        className="absolute top-1/2 h-px bg-blood-500/60"
+        style={{ left: leftCenter, width: rightCenter - leftCenter }}
+      />
+      <span className="absolute bottom-0 h-1/2 w-px bg-blood-500/60" style={{ left: mid }} />
+    </div>
+  )
+}
+
+export function Bracket({
+  bracket,
+  matches,
+  teams,
+  sport,
+  onSimulate,
+  onOpen,
+  champion: championProp,
+  seedLabels
+}: Props) {
   const champion = championProp ?? bracket[bracket.length - 1]?.matches[0]?.winnerId
   const champTeam = champion ? teams[champion] : undefined
 
   let lastSection: string | undefined
 
+  // geração do funil por rodada (null = fora do funil): mata-mata simples
+  // (sem `section`) com até 4 jogos entra; uma vez que a série de rodadas
+  // elegíveis começa, ela vai até o fim (o tamanho só cai pela metade).
+  let streak = -1
+  const funnelGen = bracket.map((round) => {
+    const eligible = !round.section && round.matches.length <= 4
+    if (!eligible) {
+      streak = -1
+      return null
+    }
+    streak = streak + 1
+    return streak
+  })
+
   return (
     <div className="flex flex-col gap-5">
-      {bracket.map((round) => {
+      {bracket.map((round, i) => {
         const section = round.section
         const showSectionHeader = !!section && section !== lastSection
         lastSection = section
+        const gen = funnelGen[i]
+        const rowGap = gen !== null ? gapForGen(gen) : BASE_GAP
+        const showConnector = gen !== null && funnelGen[i + 1] !== null
 
         return (
           <div key={round.index}>
@@ -171,14 +228,37 @@ export function Bracket({ bracket, matches, teams, sport, onSimulate, onOpen, ch
             <div className="mb-2">
               <span className="tag bg-ink-800 text-zinc-400">{round.name}</span>
             </div>
-            <div className="flex flex-wrap gap-3">
+            <div
+              className={cx('flex flex-wrap justify-center', gen === null && 'gap-3')}
+              style={gen !== null ? { gap: rowGap } : undefined}
+            >
               {round.matches.map((bm) => (
-                <BracketCard key={bm.id} bm={bm} matches={matches} teams={teams} onSimulate={onSimulate} onOpen={onOpen} />
+                <BracketCard
+                  key={bm.id}
+                  bm={bm}
+                  matches={matches}
+                  teams={teams}
+                  onSimulate={onSimulate}
+                  onOpen={onOpen}
+                />
               ))}
             </div>
+            {showConnector && (
+              <div className="flex justify-center" style={{ gap: rowGap }}>
+                {Array.from({ length: round.matches.length / 2 }).map((_, p) => (
+                  <PairConnector key={p} gap={rowGap} />
+                ))}
+              </div>
+            )}
           </div>
         )
       })}
+
+      {funnelGen[funnelGen.length - 1] !== null && (
+        <div className="flex justify-center">
+          <div className="h-5 w-px bg-blood-500/60" />
+        </div>
+      )}
 
       {/* Campeão */}
       <div className="flex flex-col items-center gap-3 border-t border-white/5 pt-5">
@@ -192,7 +272,7 @@ export function Bracket({ bracket, matches, teams, sport, onSimulate, onOpen, ch
           <Trophy size={28} className={champTeam ? 'text-blood-400' : 'text-zinc-700'} />
           {champTeam ? (
             <>
-              <TeamBadge team={champTeam} size="lg" />
+              <TeamBadge team={champTeam} size="lg" seedLabel={seedLabels?.[champTeam.id]} />
               <span className="heading text-base font-bold text-white">{champTeam.name}</span>
             </>
           ) : (

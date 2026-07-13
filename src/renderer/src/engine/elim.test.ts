@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildElim, advanceElim, readyElimMatches } from './elim'
+import { buildElim, advanceElim, readyElimMatches, pairAvoidRematch } from './elim'
 import { standardSeedOrder, nextPowerOf2 } from './bracket'
 import type { BracketRound, Match } from '../types'
 
@@ -12,12 +12,12 @@ function seed(n: number): (string | null)[] {
 }
 
 // joga a chave até o fim; o time de índice menor (mais forte) sempre vence
-function play(seeded: (string | null)[], lives: 2 | 3) {
+function play(seeded: (string | null)[], lives: 2 | 3, seedRank?: Map<string, number>) {
   const idx = (id: string) => parseInt(id.slice(1), 10)
   let built = buildElim(seeded, lives)
   let bracket: BracketRound[] = built.bracket
   let matches: Match[] = built.matches
-  let adv = advanceElim(bracket, matches)
+  let adv = advanceElim(bracket, matches, seedRank)
   bracket = adv.bracket
   matches = adv.matches
   let champion: string | undefined = adv.champion
@@ -37,7 +37,7 @@ function play(seeded: (string | null)[], lives: 2 | 3) {
       })
       played++
     }
-    adv = advanceElim(bracket, matches)
+    adv = advanceElim(bracket, matches, seedRank)
     bracket = adv.bracket
     matches = adv.matches
     champion = adv.champion
@@ -183,4 +183,55 @@ describe('eliminação múltipla — byes (não potência de 2)', () => {
     expect(r.champion).toBe('t0')
     expect(readyElimMatches(r).length).toBe(0)
   })
+})
+
+describe('pairAvoidRematch — prioriza seed quando fornecido', () => {
+  it('com mais de uma opção sem revanche, pareia melhor-remanescente com pior-remanescente', () => {
+    const seedRank = new Map([
+      ['t0', 1],
+      ['t1', 2],
+      ['t2', 3],
+      ['t3', 4]
+    ])
+    const noRematch = () => false // ninguém jogou ainda — qualquer pareamento é válido
+    const pairs = pairAvoidRematch(['t2', 't0', 't3', 't1'], noRematch, seedRank)
+    const has = (a: string, b: string) => pairs.some(([x, y]) => (x === a && y === b) || (x === b && y === a))
+    // melhor (t0) com o pior (t3); o segundo par fecha entre os dois do meio
+    expect(has('t0', 't3')).toBe(true)
+    expect(has('t1', 't2')).toBe(true)
+  })
+
+  it('fuga de revanche continua valendo mesmo com seed (critério secundário)', () => {
+    const seedRank = new Map([
+      ['t0', 1],
+      ['t1', 2],
+      ['t2', 3],
+      ['t3', 4]
+    ])
+    // t0 já jogou contra t3 (o pareamento "ideal" por seed) — precisa fugir dessa revanche
+    const played = (a: string, b: string) => (a === 't0' && b === 't3') || (a === 't3' && b === 't0')
+    const pairs = pairAvoidRematch(['t2', 't0', 't3', 't1'], played, seedRank)
+    const has = (a: string, b: string) => pairs.some(([x, y]) => (x === a && y === b) || (x === b && y === a))
+    expect(has('t0', 't3')).toBe(false)
+  })
+
+  it('sem seedRank, cai no sorteio de sempre (defensivo) e ainda evita revanche', () => {
+    const played = (a: string, b: string) => (a === 't0' && b === 't1') || (a === 't1' && b === 't0')
+    const pairs = pairAvoidRematch(['t0', 't1', 't2', 't3'], played)
+    const has = (a: string, b: string) => pairs.some(([x, y]) => (x === a && y === b) || (x === b && y === a))
+    expect(has('t0', 't1')).toBe(false)
+    expect(pairs).toHaveLength(2)
+  })
+})
+
+describe('eliminação múltipla — ressorteio com seed não muda o resultado, só a justiça', () => {
+  for (const n of [8, 16, 32]) {
+    it(`${n} times: com seedRank, campeão continua o seed 1 e sem revanches evitáveis`, () => {
+      const seeded = seed(n)
+      const seedRank = new Map(seeded.map((id, i) => [id!, i + 1]))
+      const r = play(seeded, 2, seedRank)
+      expect(r.champion).toBe('t0')
+      expect(readyElimMatches(r).length).toBe(0)
+    })
+  }
 })

@@ -8,7 +8,8 @@ export function StandingsTable({
   sport,
   qualifyCount = 0,
   compact = false,
-  form
+  form,
+  seedLabels
 }: {
   rows: StandingRow[]
   teams: Record<string, Team>
@@ -17,6 +18,8 @@ export function StandingsTable({
   compact?: boolean
   /** forma por time (🔥 embalado / ❄️ má fase) — opcional */
   form?: Record<string, 'hot' | 'cold' | null>
+  /** selo de seed (ex.: "EMEA #2") — opcional, só aparece quando o campeonato tem essa informação */
+  seedLabels?: Record<string, string>
 }) {
   const isEsports = sport === 'esports'
   return (
@@ -69,6 +72,11 @@ export function StandingsTable({
                     <span className={cx('truncate font-semibold', idle ? 'text-zinc-400' : 'text-zinc-100')}>
                       {team?.name ?? '—'}
                     </span>
+                    {seedLabels?.[r.teamId] && (
+                      <span className="shrink-0 rounded-full border border-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-500">
+                        {seedLabels[r.teamId]}
+                      </span>
+                    )}
                     {form?.[r.teamId] === 'hot' && <span title="Embalado">🔥</span>}
                     {form?.[r.teamId] === 'cold' && <span title="Má fase">❄️</span>}
                   </div>

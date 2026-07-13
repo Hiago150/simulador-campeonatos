@@ -192,7 +192,13 @@ function buildLastChance(lbRounds: BracketRound[], push: PushFn): BracketMatch |
   return prev
 }
 
-/** pareamento perfeito da lista usando só arestas permitidas; null se impossível */
+/**
+ * Pareamento perfeito da lista usando só arestas permitidas; null se impossível.
+ * Tenta primeiro o remanescente PIOR posicionado (índice mais alto do `pool`)
+ * pra cada melhor posicionado (`i` crescente) — se `pool` vier ordenado por
+ * seed, isso prioriza melhor-vs-pior; o backtracking só foge dessa ordem o
+ * suficiente pra ainda cumprir a regra de `forbidden` (fuga de revanche).
+ */
 function perfectMatching(
   pool: string[],
   forbidden: (a: string, b: string) => boolean
@@ -204,7 +210,7 @@ function perfectMatching(
     const i = used.indexOf(false)
     if (i < 0) return true
     used[i] = true
-    for (let j = i + 1; j < n; j++) {
+    for (let j = n - 1; j > i; j--) {
       if (used[j] || forbidden(pool[i], pool[j])) continue
       used[j] = true
       pairs.push([pool[i], pool[j]])
@@ -219,12 +225,21 @@ function perfectMatching(
 }
 
 /**
- * Pareia os times evitando revanches; sorteia a ordem para variar (ressorteio).
+ * Pareia os times remanescentes da chave inferior. Quando há `seedRank`
+ * (posição original na chave), prioriza melhor-semeado vs pior-semeado
+ * remanescente; a fuga de revanche continua como critério — sem `seedRank`,
+ * cai no sorteio de sempre (defensivo, não deve ocorrer hoje em diante).
  * Fase 1: procura um pareamento TOTALMENTE sem revanche (se existir, usa-o).
  * Fase 2: só se for combinatoriamente impossível, permite revanches.
  */
-function pairAvoidRematch(ids: string[], played: (a: string, b: string) => boolean): [string, string][] {
-  const pool = shuffle(ids)
+export function pairAvoidRematch(
+  ids: string[],
+  played: (a: string, b: string) => boolean,
+  seedRank?: Map<string, number>
+): [string, string][] {
+  const pool = seedRank
+    ? [...ids].sort((a, b) => (seedRank.get(a) ?? Infinity) - (seedRank.get(b) ?? Infinity))
+    : shuffle(ids)
   return perfectMatching(pool, played) ?? perfectMatching(pool, () => false) ?? []
 }
 
@@ -234,7 +249,9 @@ function pairAvoidRematch(ids: string[], played: (a: string, b: string) => boole
 
 export function advanceElim(
   bracketIn: BracketRound[],
-  matchesIn: Match[]
+  matchesIn: Match[],
+  /** posição original na chave (índice+1 do `cupSeed`) — prioriza pareamento por seed no ressorteio */
+  seedRank?: Map<string, number>
 ): { bracket: BracketRound[]; matches: Match[]; champion?: string } {
   const bracket = bracketIn.map((r) => ({ ...r, matches: r.matches.map((m) => ({ ...m })) }))
   const matches = matchesIn.slice()
@@ -284,7 +301,7 @@ export function advanceElim(
       const ids = round.entrantFeeds.map((f) => resolve(f).id).filter((id): id is string => id != null)
       const pool = ids.slice()
       const byeTeam = pool.length % 2 === 1 ? pool.pop() : undefined
-      const pairs = pairAvoidRematch(pool, alreadyPlayed)
+      const pairs = pairAvoidRematch(pool, alreadyPlayed, seedRank)
       round.matches.forEach((bm, i) => {
         if (i < pairs.length) {
           bm.homeId = pairs[i][0]

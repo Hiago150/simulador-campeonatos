@@ -20,14 +20,29 @@ const SIZES = {
   xl: 'h-20 w-20 text-2xl rounded-2xl'
 }
 
+/** selo de seed (ex.: "EMEA #2") no canto do badge — só quando `seedLabel` é passado */
+function SeedBadge({ label }: { label: string }) {
+  return (
+    <span
+      title={label}
+      className="tnum absolute -bottom-1 -right-1 rounded-full border border-white/10 bg-ink-900 px-1 text-[8px] font-bold leading-tight text-zinc-300"
+    >
+      {label}
+    </span>
+  )
+}
+
 export function TeamBadge({
   team,
   size = 'md',
-  className
+  className,
+  seedLabel
 }: {
   team: Team | undefined
   size?: keyof typeof SIZES
   className?: string
+  /** selo de seed (ex.: "EMEA #2") — opcional, só aparece quando passado explicitamente */
+  seedLabel?: string
 }) {
   if (!team) {
     return (
@@ -45,15 +60,11 @@ export function TeamBadge({
 
   // Escudo original (empacotado), quando existir
   const crest = crestFor(team.id)
-  if (crest) {
-    return (
-      <div className={cx('flex shrink-0 items-center justify-center', SIZES[size], className)} title={team.name}>
-        <img src={crest} alt={team.name} draggable={false} className="h-full w-full object-contain p-[6%]" />
-      </div>
-    )
-  }
-
-  return (
+  const inner = crest ? (
+    <div className={cx('flex shrink-0 items-center justify-center', SIZES[size], className)} title={team.name}>
+      <img src={crest} alt={team.name} draggable={false} className="h-full w-full object-contain p-[6%]" />
+    </div>
+  ) : (
     <div
       className={cx(
         'heading flex shrink-0 items-center justify-center font-bold shadow-sm ring-1 ring-black/30',
@@ -64,6 +75,14 @@ export function TeamBadge({
       title={team.name}
     >
       {team.logo ? <span className="text-lg leading-none">{team.logo}</span> : team.shortName}
+    </div>
+  )
+
+  if (!seedLabel) return inner
+  return (
+    <div className="relative inline-flex shrink-0">
+      {inner}
+      <SeedBadge label={seedLabel} />
     </div>
   )
 }

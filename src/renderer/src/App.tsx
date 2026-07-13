@@ -10,7 +10,6 @@ import { TournamentScreen } from './screens/Tournament'
 import { HistoryScreen } from './screens/History'
 import { TeamsScreen } from './screens/Teams'
 import { StatsScreen } from './screens/Stats'
-import { LibraryScreen } from './screens/Library'
 import { SeasonScreen } from './screens/Season'
 
 const SCREENS = {
@@ -20,7 +19,6 @@ const SCREENS = {
   history: HistoryScreen,
   teams: TeamsScreen,
   stats: StatsScreen,
-  library: LibraryScreen,
   season: SeasonScreen
 } as const
 

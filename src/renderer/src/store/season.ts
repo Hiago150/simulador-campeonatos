@@ -151,6 +151,46 @@ interface SeasonDraft {
 
 // ─── Acesso/descenso entre divisões interligadas ─────────────────────────────
 
+/** de onde e em que posição um time chegou pra este slot (fixo = sem origem) */
+export interface SlotArrival {
+  teamId: string
+  fromSlotId?: string
+  /** posição 1-based na classificação do slot de origem (1 = melhor) */
+  rank?: number
+}
+
+/**
+ * Resolve os times de um slot na hora de iniciar o campeonato do ano, COM a
+ * posição de chegada de cada um: elenco fixo (`teamIds`, sem origem) + vagas
+ * dinâmicas (`qualifiesFrom`, faixa offset..offset+count da classificação
+ * final do slot de origem — cada posição vira um `rank` 1-based), sem
+ * duplicatas (fixo tem prioridade). Fonte ainda não concluída no ano é
+ * ignorada com segurança.
+ */
+export function resolveSlotArrivals(
+  slot: SeasonSlot,
+  slotRankings: Record<string, string[]> | undefined
+): SlotArrival[] {
+  const seen = new Set<string>()
+  const out: SlotArrival[] = []
+  for (const teamId of slot.teamIds ?? []) {
+    if (seen.has(teamId)) continue
+    seen.add(teamId)
+    out.push({ teamId })
+  }
+  for (const q of slot.qualifiesFrom ?? []) {
+    const start = q.offset ?? 0
+    const ranking = slotRankings?.[q.slotId] ?? []
+    for (let i = 0; i < q.count; i++) {
+      const teamId = ranking[start + i]
+      if (!teamId || seen.has(teamId)) continue
+      seen.add(teamId)
+      out.push({ teamId, fromSlotId: q.slotId, rank: start + i + 1 })
+    }
+  }
+  return out
+}
+
 /**
  * Resolve os times de um slot na hora de iniciar o campeonato do ano:
  * elenco fixo (`teamIds`) + vagas dinâmicas (`qualifiesFrom`, faixa
@@ -161,12 +201,7 @@ export function resolveSlotTeamIds(
   slot: SeasonSlot,
   slotRankings: Record<string, string[]> | undefined
 ): string[] {
-  const fixed = slot.teamIds ?? []
-  const dynamic = (slot.qualifiesFrom ?? []).flatMap((q) => {
-    const start = q.offset ?? 0
-    return slotRankings?.[q.slotId]?.slice(start, start + q.count) ?? []
-  })
-  return [...new Set([...fixed, ...dynamic])]
+  return resolveSlotArrivals(slot, slotRankings).map((a) => a.teamId)
 }
 
 /**

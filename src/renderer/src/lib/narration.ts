@@ -90,12 +90,12 @@ export function matchMoments(m: Match, teams: Record<string, Team>): Moment[] {
     e.maps.forEach((mp, i) => {
       const winnerName = mp.home > mp.away ? home : away
       const min = Math.min(mp.home, mp.away)
-      const flavor = min <= 4 ? ' · atropelo' : min >= 11 ? ' · no detalhe' : ''
+      const flavor = mp.overtime ? ' · prorrogação' : min <= 4 ? ' · atropelo' : min >= 11 ? ' · no detalhe' : ''
       const closesSeries = i === e.maps.length - 1 // o último mapa fecha a série
       out.push({
         icon: '🗺️',
         tone: 'map',
-        highlight: closesSeries ? 'decisive' : undefined,
+        highlight: closesSeries || mp.overtime ? 'decisive' : undefined,
         text: `Mapa ${i + 1} · ${mp.name}: ${mp.home}–${mp.away} (${winnerName})${flavor}${
           closesSeries ? ' · fecha a série' : ''
         }`
@@ -137,6 +137,11 @@ export function esportsHighlightOptions(m: Match, teams: Record<string, Team>): 
   const out: string[] = []
 
   e.maps.forEach((mp, i) => {
+    if (mp.overtime) {
+      const winner = mp.home > mp.away ? home : away
+      const [hi, lo] = [Math.max(mp.home, mp.away), Math.min(mp.home, mp.away)]
+      out.push(`O Mapa ${i + 1} (${mp.name}) foi decidido na prorrogação: ${winner} levou por ${hi}–${lo}.`)
+    }
     if (!mp.lines || mp.lines.length === 0) return
     const top = [...mp.lines].sort((a, b) => b.kills - a.kills)[0]
     const teamName = top.teamId === m.homeId ? home : away

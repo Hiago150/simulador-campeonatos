@@ -21,6 +21,7 @@ import {
 } from './bracket'
 import { advanceElim, buildElim, elimLives, readyElimMatches } from './elim'
 import { computeStandings } from './standings'
+import { buildRegionPotGroups } from './regionDraw'
 
 function isElim(f: Format): boolean {
   return f === 'double-elim' || f === 'triple-elim'
@@ -34,6 +35,10 @@ export interface CreateInput {
   config: TournamentConfig
   /** elencos de e-sports editados pelo usuário (por jogo + time) */
   rosterOverrides?: RosterOverrides
+  /** posição de chegada de cada time (classificado via qualifiesFrom na Temporada) */
+  arrivals?: Record<string, { fromSlotId?: string; rank?: number }>
+  /** true só quando a própria Temporada está criando este campeonato (nunca no avulso) */
+  fromSeason?: boolean
 }
 
 const groupLetter = (i: number): string => String.fromCharCode(65 + i)
@@ -51,6 +56,39 @@ function randomSeed(config: TournamentConfig): boolean {
 /** ida e volta no mata-mata — só faz sentido no futebol */
 function twoLeggedOf(config: TournamentConfig, sport: Sport): boolean {
   return config.twoLeggedKO === true && sport === 'football'
+}
+
+type Arrivals = CreateInput['arrivals']
+
+/**
+ * Ordena times por posição de chegada (quem se classificou melhor entra em
+ * pote melhor), com força bruta como critério de desempate — times sem
+ * `arrivals` (ex.: elenco fixo do slot) ficam por último nesse critério e
+ * disputam entre si só por força, exatamente como sempre foi.
+ */
+function orderBySeed(teams: Team[], arrivals?: Arrivals): Team[] {
+  const rankOf = (team: Team): number => arrivals?.[team.id]?.rank ?? Number.POSITIVE_INFINITY
+  return [...teams].sort((a, b) => rankOf(a) - rankOf(b) || b.strength - a.strength)
+}
+
+/** posição original na chave (índice+1 do `cupSeed`), pra priorizar seed no ressorteio da chave inferior */
+function seedRankFrom(cupSeed?: (string | null)[]): Map<string, number> | undefined {
+  if (!cupSeed) return undefined
+  const m = new Map<string, number>()
+  cupSeed.forEach((id, i) => {
+    if (id) m.set(id, i + 1)
+  })
+  return m
+}
+
+/** selo genérico ("#N") pra times com posição de chegada — potes por região geram um mais rico e substituem este */
+function genericSeedLabels(arrivals?: Arrivals): Record<string, string> | undefined {
+  if (!arrivals) return undefined
+  const out: Record<string, string> = {}
+  for (const [teamId, a] of Object.entries(arrivals)) {
+    if (a.rank != null) out[teamId] = `#${a.rank}`
+  }
+  return Object.keys(out).length ? out : undefined
 }
 
 // ============================================================
@@ -73,7 +111,10 @@ export function createTournament(input: CreateInput): Tournament {
     config: input.config,
     teams,
     matches: [],
-    phase: 'league'
+    phase: 'league',
+    ...(input.arrivals
+      ? { arrivals: input.arrivals, seedLabels: genericSeedLabels(input.arrivals) }
+      : {})
   }
 
   if (input.format === 'league' || input.format === 'league-playoffs') {
@@ -85,7 +126,7 @@ export function createTournament(input: CreateInput): Tournament {
   }
 
   if (input.format === 'cup') {
-    const seeded = seedForCup(teams, randomSeed(input.config))
+    const seeded = seedForCup(teams, randomSeed(input.config), input.arrivals)
     const { bracket, matches } = buildBracket(seeded, twoLeggedOf(input.config, input.sport))
     // avança uma vez para resolver byes de imediato
     const adv = advanceBracket(bracket, matches)
@@ -99,9 +140,9 @@ export function createTournament(input: CreateInput): Tournament {
   }
 
   if (isElim(input.format)) {
-    const seeded = seedForCup(teams, randomSeed(input.config))
+    const seeded = seedForCup(teams, randomSeed(input.config), input.arrivals)
     const built = buildElim(seeded, elimLives(input.format))
-    const adv = advanceElim(built.bracket, built.matches)
+    const adv = advanceElim(built.bracket, built.matches, seedRankFrom(seeded))
     return {
       ...base,
       cupSeed: seeded,
@@ -112,12 +153,25 @@ export function createTournament(input: CreateInput): Tournament {
   }
 
   if (input.format === 'groups') {
-    const { groups, matches } = buildGroups(teams, input.config)
+    // potes por região — só Valorant, só quando a própria Temporada monta o evento
+    if (input.fromSeason && input.sport === 'esports' && input.config.game === 'valorant') {
+      const regionDraw = buildRegionPotGroups(teams, input.config, input.arrivals)
+      if (regionDraw) {
+        return {
+          ...base,
+          groups: regionDraw.groups,
+          matches: regionDraw.matches,
+          seedLabels: regionDraw.seedLabels,
+          phase: 'group'
+        }
+      }
+    }
+    const { groups, matches } = buildGroups(teams, input.config, input.arrivals)
     return { ...base, groups, matches, phase: 'group' }
   }
 
   // swiss
-  const swissMatches = buildSwissRound1(teams, randomSeed(input.config))
+  const swissMatches = buildSwissRound1(teams, randomSeed(input.config), input.arrivals)
   return {
     ...base,
     matches: swissMatches,
@@ -130,18 +184,20 @@ export function createTournament(input: CreateInput): Tournament {
   }
 }
 
-function seedForCup(teams: Team[], pureRandom: boolean): (string | null)[] {
-  const ordered = pureRandom ? shuffle(teams) : [...teams].sort((a, b) => b.strength - a.strength)
+function seedForCup(teams: Team[], pureRandom: boolean, arrivals?: Arrivals): (string | null)[] {
+  const ordered = pureRandom ? shuffle(teams) : orderBySeed(teams, arrivals)
   const size = nextPowerOf2(ordered.length)
   const order = standardSeedOrder(size)
   return order.map((seed) => ordered[seed - 1]?.id ?? null)
 }
 
-function buildGroups(teams: Team[], config: TournamentConfig): { groups: Group[]; matches: Match[] } {
+function buildGroups(
+  teams: Team[],
+  config: TournamentConfig,
+  arrivals?: Arrivals
+): { groups: Group[]; matches: Match[] } {
   const G = config.groupCount
-  const ordered = randomSeed(config)
-    ? shuffle(teams)
-    : [...teams].sort((a, b) => b.strength - a.strength)
+  const ordered = randomSeed(config) ? shuffle(teams) : orderBySeed(teams, arrivals)
 
   const groups: Group[] = Array.from({ length: G }, (_, i) => ({
     id: groupLetter(i),
@@ -177,8 +233,8 @@ function buildGroups(teams: Team[], config: TournamentConfig): { groups: Group[]
   return { groups, matches }
 }
 
-function buildSwissRound1(teams: Team[], pureRandom: boolean): Match[] {
-  const ordered = pureRandom ? shuffle(teams) : [...teams].sort((a, b) => b.strength - a.strength)
+function buildSwissRound1(teams: Team[], pureRandom: boolean, arrivals?: Arrivals): Match[] {
+  const ordered = pureRandom ? shuffle(teams) : orderBySeed(teams, arrivals)
   const half = Math.floor(ordered.length / 2)
   const matches: Match[] = []
   for (let i = 0; i < half; i++) {
@@ -336,7 +392,7 @@ function advanceKnockout(t: Tournament): Tournament {
 
 function advanceElimPhase(t: Tournament): Tournament {
   if (!t.bracket) return t
-  const { bracket, matches, champion } = advanceElim(t.bracket, t.matches)
+  const { bracket, matches, champion } = advanceElim(t.bracket, t.matches, seedRankFrom(t.cupSeed))
   let nt: Tournament = { ...t, bracket, matches }
   if (champion) nt = { ...nt, champion, phase: 'finished' }
   return nt
@@ -369,15 +425,16 @@ function seedFromGroups(t: Tournament): (string | null)[] {
     return seeded
   }
 
-  // fallback: classificados ordenados por força, semeados no padrão
-  const quals: { id: string; strength: number }[] = []
+  // fallback: classificados ordenados por posição de chegada (quando existir)
+  // + força como desempate, semeados no padrão
+  const qualTeams: Team[] = []
   perGroup.forEach((st) => {
     st.slice(0, K).forEach((row) => {
       const team = teamById(t, row.teamId)
-      if (team) quals.push({ id: team.id, strength: team.strength })
+      if (team) qualTeams.push(team)
     })
   })
-  quals.sort((a, b) => b.strength - a.strength)
+  const quals = orderBySeed(qualTeams, t.arrivals)
   const size = nextPowerOf2(quals.length)
   const order = standardSeedOrder(size)
   return order.map((seed) => quals[seed - 1]?.id ?? null)
@@ -675,7 +732,7 @@ export function resetResults(t: Tournament): Tournament {
   }
   if (isElim(t.format) && t.cupSeed) {
     const built = buildElim(t.cupSeed, elimLives(t.format))
-    const adv = advanceElim(built.bracket, built.matches)
+    const adv = advanceElim(built.bracket, built.matches, seedRankFrom(t.cupSeed))
     return {
       ...t,
       bracket: adv.bracket,

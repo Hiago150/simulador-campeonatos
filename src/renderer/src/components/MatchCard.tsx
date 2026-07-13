@@ -63,9 +63,9 @@ export function MatchCard({ match, home, away, sport, onSimulate, onReRoll, onOp
     <div
       className={cx(
         'card group transition',
-        played && 'cursor-pointer hover:border-blood-800/40 hover:bg-ink-800/80'
+        onOpen && 'cursor-pointer hover:border-blood-800/40 hover:bg-ink-800/80'
       )}
-      onClick={() => played && onOpen?.()}
+      onClick={() => onOpen?.()}
     >
       <div className="flex items-center gap-3 px-3.5 py-3">
         <Side team={home} played={played} winner={homeWon} align="left" />
