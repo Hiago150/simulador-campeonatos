@@ -26,3 +26,6 @@ Thumbs.db
 
 # Export de campeonato gerado pelo app, commitado por engano (não versionar)
 /Wolrd.json
+
+# Worktrees temporarios de sessoes de agente
+.worktrees/

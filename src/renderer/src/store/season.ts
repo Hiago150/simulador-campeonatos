@@ -426,6 +426,9 @@ export const useSeasons = create<SeasonStore>()(
         if (nextSlot >= active.slots.length) {
           const yi = years.findIndex((y) => y.year === active.currentYear)
           if (yi >= 0) {
+            // foto da força de cada time NESTE ano (antes da evolução pro ano
+            // seguinte) — alimenta o gráfico de evolução da era
+            const teamStrengths = Object.fromEntries(active.teamPool.map((tm) => [tm.id, tm.strength]))
             // fim do ano: aplica o acesso/descenso das divisões interligadas
             // (as trocas valem a partir do ano seguinte)
             if (active.divisionBoundaries?.length) {
@@ -437,9 +440,9 @@ export const useSeasons = create<SeasonStore>()(
                 poolName
               )
               slots = result.slots
-              years[yi] = { ...years[yi], movements: result.movements, completed: true }
+              years[yi] = { ...years[yi], movements: result.movements, teamStrengths, completed: true }
             } else {
-              years[yi] = { ...years[yi], completed: true }
+              years[yi] = { ...years[yi], teamStrengths, completed: true }
             }
           }
           currentSlotIndex = 0

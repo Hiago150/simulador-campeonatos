@@ -112,6 +112,7 @@ export function createTournament(input: CreateInput): Tournament {
     teams,
     matches: [],
     phase: 'league',
+    ...(input.fromSeason ? { fromSeason: true } : {}),
     ...(input.arrivals
       ? { arrivals: input.arrivals, seedLabels: genericSeedLabels(input.arrivals) }
       : {})

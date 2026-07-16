@@ -3,14 +3,14 @@
 // Tom misto: fatos sóbrios, manchetes mais soltas.
 import type { Match, Team, Tournament } from '../types'
 
-const nameOf = (teams: Record<string, Team>, id: string | null | undefined): string =>
+export const nameOf = (teams: Record<string, Team>, id: string | null | undefined): string =>
   (id ? teams[id]?.name : undefined) ?? '—'
 
-const strengthOf = (teams: Record<string, Team>, id: string | null | undefined): number =>
+export const strengthOf = (teams: Record<string, Team>, id: string | null | undefined): number =>
   (id ? teams[id]?.strength : undefined) ?? 50
 
 /** vencedor de uma partida jogada (id) ou null em empate sem decisão */
-function winnerOf(m: Match): string | null {
+export function winnerOf(m: Match): string | null {
   if (m.winnerId) return m.winnerId
   if (m.homeScore > m.awayScore) return m.homeId
   if (m.awayScore > m.homeScore) return m.awayId
@@ -185,7 +185,7 @@ function scoreText(m: Match): string {
 }
 
 /** placar na perspectiva de um time (ex.: vencedor primeiro) */
-function scoreFrom(m: Match, teamId: string): string {
+export function scoreFrom(m: Match, teamId: string): string {
   const home = teamId === m.homeId
   let s = `${home ? m.homeScore : m.awayScore}–${home ? m.awayScore : m.homeScore}`
   if (m.penalties) {
@@ -195,7 +195,7 @@ function scoreFrom(m: Match, teamId: string): string {
   return s
 }
 
-function excitement(m: Match): number {
+export function excitement(m: Match): number {
   if (m.football) {
     const total = m.homeScore + m.awayScore
     const margin = Math.abs(m.homeScore - m.awayScore)

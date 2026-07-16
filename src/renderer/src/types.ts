@@ -224,6 +224,8 @@ export interface Tournament {
   arrivals?: Record<string, { fromSlotId?: string; rank?: number }>
   /** selo de seed pronto pra exibir (ex.: "EMEA #2", "#3") — snapshot da criação */
   seedLabels?: Record<string, string>
+  /** criado pela Temporada — nunca entra no histórico global (resultado vai só pra temporada) */
+  fromSeason?: boolean
   phase: TournamentPhase
   champion?: string // teamId quando encerrado
 }
@@ -379,6 +381,12 @@ export interface SeasonYearEntry {
   movements?: SeasonMovement[]
   /** campeonato completo de cada slot naquele ano (tabelas/chaveamento/partidas) — permite rever depois */
   tournaments?: Record<string, Tournament>
+  /**
+   * Força de cada time no momento em que o ano fechou (foto tirada antes da
+   * evolução pro ano seguinte) — alimenta o gráfico de evolução da era. Só
+   * anos fechados a partir desta feature têm essa foto (retroativo não existe).
+   */
+  teamStrengths?: Record<string, number>
   completed: boolean
 }
 

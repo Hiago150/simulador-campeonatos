@@ -50,6 +50,7 @@ import { Button, Segmented, Stepper, Toggle } from '../components/ui'
 import { createTournament, simulateAll } from '../engine/tournament'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { TeamBadge } from '../components/TeamBadge'
+import { AwardsGalleryTab, ClubsTab, H2HTab, IdolsTab, YearArcsPanel, YearAwardsPanel } from './SeasonInsights'
 import { cx } from '../lib/cx'
 import { uid } from '../engine/rng'
 
@@ -150,29 +151,40 @@ export function SeasonScreen() {
     activeSeason ? viewForStatus(activeSeason.status) : 'list'
   )
   const [detailYear, setDetailYear] = useState<number | null>(null)
+  // clube em foco ao abrir o Hall da Fama (vindo do detalhe do ano, por ex.)
+  const [hallClubId, setHallClubId] = useState<string | null>(null)
 
   const goToSeason = (s: Season) => setView(viewForStatus(s.status))
   const backToStatus = () => setView(activeSeason ? viewForStatus(activeSeason.status) : 'list')
+  const openHall = () => {
+    setHallClubId(null)
+    setView('hall')
+  }
+  const openClub = (teamId: string) => {
+    setHallClubId(teamId)
+    setView('hall')
+  }
 
   if (view === 'wizard') return <SeasonWizard onBack={() => setView('list')} onDone={(s) => goToSeason(s)} />
   if (view === 'hub')
     return (
       <SeasonHub
         onLeave={() => setView('list')}
-        onHall={() => setView('hall')}
+        onHall={openHall}
         onForm={() => setView('form')}
         onAdvance={(s) => goToSeason(s)}
       />
     )
   if (view === 'summary')
-    return <SeasonYearSummary onNext={() => setView('hub')} onLeave={() => setView('list')} onHall={() => setView('hall')} />
+    return <SeasonYearSummary onNext={() => setView('hub')} onLeave={() => setView('list')} onHall={openHall} />
   if (view === 'finale')
-    return <SeasonFinale onLeave={() => setView('list')} onHall={() => setView('hall')} />
+    return <SeasonFinale onLeave={() => setView('list')} onHall={openHall} />
   if (view === 'form') return <SeasonFormScreen onBack={backToStatus} />
   if (view === 'hall')
     return (
       <SeasonHallOfFame
         onBack={backToStatus}
+        initialClubId={hallClubId}
         onYear={(y) => {
           setDetailYear(y)
           setView('year-detail')
@@ -180,7 +192,7 @@ export function SeasonScreen() {
       />
     )
   if (view === 'year-detail' && detailYear != null)
-    return <SeasonYearDetail year={detailYear} onBack={() => setView('hall')} />
+    return <SeasonYearDetail year={detailYear} onBack={() => setView('hall')} onClub={openClub} />
   return <SeasonList onNew={() => setView('wizard')} onResume={(s) => goToSeason(s)} />
 }
 
@@ -2082,6 +2094,14 @@ function SeasonYearSummary({
           )}
         </div>
 
+        {/* Retrospecto narrado + prêmios do ano (derivados dos dados do ano) */}
+        {yearEntry && (
+          <div className="mb-5 space-y-5">
+            <YearArcsPanel season={s} entry={yearEntry} />
+            <YearAwardsPanel season={s} entry={yearEntry} poolMap={poolMap} />
+          </div>
+        )}
+
         {/* Acesso e rebaixamento entre divisões interligadas */}
         {(yearEntry?.movements ?? []).length > 0 && (
           <div className="panel mb-5 p-5">
@@ -2477,8 +2497,21 @@ function SeasonFinale({ onLeave, onHall }: { onLeave: () => void; onHall: () => 
 
 // ─── Hall da Fama / linha do tempo ──────────────────────────────────────────
 
-function SeasonHallOfFame({ onBack, onYear }: { onBack: () => void; onYear: (year: number) => void }) {
+type HallTab = 'geral' | 'premios' | 'idolos' | 'confrontos' | 'clubes'
+
+function SeasonHallOfFame({
+  onBack,
+  onYear,
+  initialClubId
+}: {
+  onBack: () => void
+  onYear: (year: number) => void
+  /** abre já na aba Clubes com esse clube em foco (vindo do detalhe do ano) */
+  initialClubId?: string | null
+}) {
   const activeSeason = useSeasons((s) => s.activeSeason)
+  const [tab, setTab] = useState<HallTab>(initialClubId ? 'clubes' : 'geral')
+  const [clubId, setClubId] = useState<string | null>(initialClubId ?? null)
 
   if (!activeSeason) return null
   const s = activeSeason
@@ -2495,6 +2528,19 @@ function SeasonHallOfFame({ onBack, onYear }: { onBack: () => void; onYear: (yea
   const mapStomp = s.records?.biggestMapStomp
   const topMvp = Object.values(s.records?.mvpCounts ?? {}).sort((a, b) => b.count - a.count)[0]
 
+  const openClub = (teamId: string) => {
+    setClubId(teamId)
+    setTab('clubes')
+  }
+
+  const TABS: Array<{ id: HallTab; label: string }> = [
+    { id: 'geral', label: 'Visão geral' },
+    { id: 'premios', label: 'Prêmios' },
+    { id: 'idolos', label: 'Ídolos' },
+    { id: 'confrontos', label: 'Confrontos' },
+    { id: 'clubes', label: 'Clubes' }
+  ]
+
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-3xl px-4 py-8 md:px-8">
@@ -2502,7 +2548,7 @@ function SeasonHallOfFame({ onBack, onYear }: { onBack: () => void; onYear: (yea
           <ArrowLeft size={16} /> Voltar
         </button>
 
-        <div className="mb-7">
+        <div className="mb-6">
           <p className="kicker mb-2">
             <Crown size={13} className="text-amber-400" />
             Hall da Fama
@@ -2515,10 +2561,38 @@ function SeasonHallOfFame({ onBack, onYear }: { onBack: () => void; onYear: (yea
           </div>
         </div>
 
+        {/* Abas */}
+        <div className="mb-6 flex flex-wrap gap-1.5">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => {
+                setTab(t.id)
+                if (t.id !== 'clubes') setClubId(null)
+              }}
+              className={cx(
+                'rounded-full px-3.5 py-1.5 text-xs font-semibold transition',
+                tab === t.id ? 'bg-blood-grad text-white' : 'bg-ink-800 text-zinc-400 hover:text-zinc-100'
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'premios' && <AwardsGalleryTab season={s} poolMap={poolMap} onClub={openClub} />}
+        {tab === 'idolos' && <IdolsTab season={s} poolMap={poolMap} />}
+        {tab === 'confrontos' && <H2HTab season={s} poolMap={poolMap} />}
+        {tab === 'clubes' && (
+          <ClubsTab season={s} poolMap={poolMap} focusTeamId={clubId} onFocus={setClubId} />
+        )}
+
+        {tab === 'geral' && (
+          <>
         {/* Pódio de títulos */}
         <div className="panel mb-5 p-4">
           <p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-            <Trophy size={13} className="text-amber-400" /> Ranking de títulos
+            <Trophy size={13} className="text-amber-400" /> Ranking de títulos — clique pra abrir o perfil
           </p>
           {allTimeWins.length === 0 ? (
             <p className="text-xs text-zinc-600">Nenhum título ainda.</p>
@@ -2527,12 +2601,16 @@ function SeasonHallOfFame({ onBack, onYear }: { onBack: () => void; onYear: (yea
               {allTimeWins.slice(0, 10).map(([teamId, wins], i) => {
                 const team = poolMap[teamId]
                 return (
-                  <div key={teamId} className="flex items-center gap-2">
+                  <button
+                    key={teamId}
+                    onClick={() => openClub(teamId)}
+                    className="flex items-center gap-2 rounded-lg px-1 py-0.5 text-left transition hover:bg-white/[0.03]"
+                  >
                     <span className="tnum w-5 text-right text-[11px] font-bold text-zinc-600">{i + 1}</span>
                     <TeamBadge team={team} size="sm" />
                     <span className="flex-1 truncate text-xs font-semibold text-zinc-200">{team?.name ?? teamId}</span>
                     <span className="tnum text-sm font-bold text-amber-400">{wins}×</span>
-                  </div>
+                  </button>
                 )
               })}
             </div>
@@ -2670,6 +2748,8 @@ function SeasonHallOfFame({ onBack, onYear }: { onBack: () => void; onYear: (yea
             })}
           </div>
         )}
+          </>
+        )}
       </div>
     </div>
   )
@@ -2782,7 +2862,16 @@ function SeasonFormScreen({ onBack }: { onBack: () => void }) {
 
 // ─── Detalhe de um ano (a partir do Hall da Fama) ───────────────────────────
 
-function SeasonYearDetail({ year, onBack }: { year: number; onBack: () => void }) {
+function SeasonYearDetail({
+  year,
+  onBack,
+  onClub
+}: {
+  year: number
+  onBack: () => void
+  /** abre o perfil do clube no Hall da Fama */
+  onClub: (teamId: string) => void
+}) {
   const activeSeason = useSeasons((s) => s.activeSeason)
   const viewTournament = useApp((s) => s.viewTournament)
 
@@ -2850,11 +2939,17 @@ function SeasonYearDetail({ year, onBack }: { year: number; onBack: () => void }
                     return (
                       <div key={c.slotId} className="flex items-center gap-3 rounded-xl bg-ink-800/50 px-3 py-2.5">
                         <Trophy size={14} className="shrink-0 text-amber-400" />
-                        <TeamBadge team={poolMap[c.teamId]} size="sm" />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-bold text-zinc-100">{c.teamName}</p>
-                          <p className="truncate text-xs text-zinc-500">{c.slotName}</p>
-                        </div>
+                        <button
+                          onClick={() => onClub(c.teamId)}
+                          title="Abrir perfil do clube"
+                          className="flex min-w-0 flex-1 items-center gap-3 text-left transition hover:opacity-80"
+                        >
+                          <TeamBadge team={poolMap[c.teamId]} size="sm" />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-bold text-zinc-100">{c.teamName}</p>
+                            <p className="truncate text-xs text-zinc-500">{c.slotName}</p>
+                          </div>
+                        </button>
                         {tournament && (
                           <button
                             onClick={() => viewTournament(tournament)}
@@ -2870,6 +2965,10 @@ function SeasonYearDetail({ year, onBack }: { year: number; onBack: () => void }
                 </div>
               )}
             </div>
+
+            {/* Retrospecto narrado + prêmios (derivados; ficam pra sempre no ano) */}
+            <YearArcsPanel season={s} entry={entry} />
+            <YearAwardsPanel season={s} entry={entry} poolMap={poolMap} onClub={onClub} />
 
             {/* Artilheiros / abates do ano */}
             <div className="panel p-5">

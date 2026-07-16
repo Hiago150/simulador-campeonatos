@@ -208,7 +208,16 @@ export const useApp = create<AppState>()(
           config: b.config,
           rosterOverrides: get().rosterOverrides
         })
-        set({ current: t, screen: 'tournament', lastRoundIds: [] })
+        // zera qualquer sessão de Monte Carlo/revisão herdada do campeonato anterior
+        set({
+          current: t,
+          screen: 'tournament',
+          lastRoundIds: [],
+          mcTarget: 0,
+          mcDone: 0,
+          mcTally: {},
+          reviewMode: false
+        })
         get().setToast('Novo campeonato criado a partir do histórico')
       },
 
@@ -272,6 +281,9 @@ export const useApp = create<AppState>()(
       concludeTournament: () => {
         const cur = get().current
         if (!cur || cur.phase !== 'finished') return
+        // campeonato de Temporada nunca entra no histórico global — o resultado
+        // já foi (ou será) registrado na própria temporada via recordSlotResult
+        if (cur.fromSeason) return
         useHistory.getState().commitTournament(cur)
         get().setToast('Campeonato concluído e salvo no histórico')
       },
@@ -302,25 +314,23 @@ export const useApp = create<AppState>()(
         set({ current: done, mcTally: tally, mcDone: mcDone + 1 })
       },
 
+      // roda o restante das simulações UMA por tick (setTimeout) em vez de um
+      // loop síncrono — 100× num campeonato grande travava a interface; agora
+      // o contador anda ao vivo e um erro no meio para com segurança
       mcRunAll: () => {
-        const cur = get().current
-        const { mcTarget, mcDone, mcTally } = get()
-        if (!cur || mcTarget <= 0 || mcDone >= mcTarget) return
-        const tally = { ...mcTally }
-        let last = cur
-        for (let i = mcDone; i < mcTarget; i++) {
-          const fresh = createTournament({
-            name: cur.name,
-            sport: cur.sport,
-            format: cur.format,
-            teams: cur.teams,
-            config: cur.config,
-            rosterOverrides: get().rosterOverrides
-          })
-          last = simulateAll(fresh)
-          if (last.champion) tally[last.champion] = (tally[last.champion] ?? 0) + 1
+        const step = () => {
+          const { current, mcTarget, mcDone } = get()
+          if (!current || mcTarget <= 0 || mcDone >= mcTarget) return
+          try {
+            get().mcRunOnce()
+          } catch (err) {
+            console.error('Falha numa simulação do Monte Carlo', err)
+            get().setToast('Monte Carlo interrompido por um erro — resultados parciais mantidos')
+            return
+          }
+          if (get().mcDone < get().mcTarget) setTimeout(step, 0)
         }
-        set({ current: last, mcTally: tally, mcDone: mcTarget })
+        step()
       },
 
       closeTournament: () =>

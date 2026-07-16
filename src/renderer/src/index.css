@@ -110,3 +110,17 @@ body {
     linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
   background-size: 32px 32px;
 }
+
+/* Acessibilidade: quem pede menos movimento no sistema recebe o app quase
+   estático — animações/transições CSS viram instantâneas (framer-motion é
+   tratado à parte via MotionConfig reducedMotion="user" no main.tsx) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

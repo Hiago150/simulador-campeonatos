@@ -64,7 +64,6 @@ function chaosLabel(config: Tournament['config']): string | null {
   if (c >= 1) return 'Loteria'
   if (c >= 0.7) return 'Caótico'
   if (c >= 0.35) return 'Equilibrado'
-  if (c > 0) return 'Imprevisível'
   return null
 }
 
@@ -131,8 +130,11 @@ export function TournamentScreen() {
 
   const handleConclude = () => {
     if (isSeasonTournament) {
-      // temporada é isolada do histórico global — só registra na própria temporada
+      // temporada é isolada do histórico global — só registra na própria temporada.
+      // Limpa o `current` (closeTournament) pra ele não sobrar como "em andamento"
+      // na Home e acabar concluído de novo fora da temporada (dupla contagem).
       recordSlotResult(t)
+      closeTournament()
       go('season')
     } else {
       concludeTournament()
@@ -224,7 +226,7 @@ export function TournamentScreen() {
                 <Eye size={11} /> Revisão — resultado já registrado
               </span>
             )}
-            {finished && !concluded && !reviewMode && (
+            {finished && !concluded && !reviewMode && (!t.fromSeason || isSeasonTournament) && (
               <Button
                 variant="primary"
                 icon={<Check size={16} />}
@@ -817,6 +819,12 @@ function CupView({ t, teams, currentIds, onSim, onOpen }: ViewProps) {
   const stage = useMemo(() => {
     const ids = new Set(currentIds)
     let ms = t.matches.filter((m) => ids.has(m.id))
+    // currentIds só traz as NÃO jogadas — expande pra fase inteira (mesmo `stage`)
+    // pra partida simulada não sumir da seção na hora (ficava "esvaziando")
+    if (ms.length > 0) {
+      const stages = new Set(ms.map((m) => m.stage))
+      ms = t.matches.filter((m) => stages.has(m.stage))
+    }
     if (ms.length === 0 && t.phase === 'finished' && t.bracket?.length) {
       const finalRound = t.bracket[t.bracket.length - 1]
       const finalIds = new Set(
@@ -829,7 +837,9 @@ function CupView({ t, teams, currentIds, onSim, onOpen }: ViewProps) {
 
   if (!t.bracket) return null
   const finished = t.phase === 'finished'
-  const stageLabel = stage[0]?.stage.split(' · ')[0] ?? ''
+  // na eliminação múltipla os confrontos em aberto podem vir de seções
+  // diferentes (Winners + Losers) — o rótulo lista todas, não só a primeira
+  const stageLabel = [...new Set(stage.map((m) => m.stage.split(' · ')[0]))].join(' + ')
 
   return (
     <div className="space-y-5">

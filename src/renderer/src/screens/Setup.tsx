@@ -207,17 +207,22 @@ export function SetupScreen() {
 
   // auto-ajuste: mantém grupos/classificados/rodadas/playoffs válidos para o nº
   // de times escolhido — em vez de só acusar erro depois de iniciar
+  // auto-ajuste SÓ quando o nº de times muda — sem groupCount nas deps, senão
+  // o efeito sobrescrevia qualquer valor escolhido manualmente no stepper
   useEffect(() => {
     const n = selected.length
     if (n < 2) return
     setPlayoffQualifiers((q) => Math.max(2, Math.min(q, n)))
     setSwissRounds((r) => Math.max(1, Math.min(r, n - 1)))
-    if (format === 'groups') {
-      const gc = nearestDivisor(n, groupCount)
-      if (gc && gc !== groupCount) setGroupCount(gc)
-      const perGroup = Math.floor(n / (gc ?? groupCount))
-      setQualifiers((q) => Math.max(1, Math.min(q, Math.max(1, perGroup - 1))))
-    }
+    if (format === 'groups') setGroupCount((cur) => nearestDivisor(n, cur) ?? cur)
+  }, [selected.length, format])
+
+  // clamp dos classificados/grupo acompanha o groupCount atual (manual ou não)
+  useEffect(() => {
+    const n = selected.length
+    if (n < 2 || format !== 'groups') return
+    const perGroup = Math.floor(n / groupCount)
+    setQualifiers((q) => Math.max(1, Math.min(q, Math.max(1, perGroup - 1))))
   }, [selected.length, format, groupCount])
 
   const handleStart = () => {

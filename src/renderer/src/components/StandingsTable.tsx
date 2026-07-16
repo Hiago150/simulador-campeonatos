@@ -46,10 +46,11 @@ export function StandingsTable({
         <tbody>
           {rows.map((r) => {
             const team = teams[r.teamId]
-            const qualifies = qualifyCount > 0 && r.rank <= qualifyCount
             // antes do time estrear, a linha fica "em repouso" (traços discretos
-            // em vez de um mar de zeros) — a tabela ganha vida conforme se joga
+            // em vez de um mar de zeros) — a tabela ganha vida conforme se joga;
+            // sem jogo, também não faz sentido marcar a zona de classificação
             const idle = r.played === 0
+            const qualifies = qualifyCount > 0 && r.rank <= qualifyCount && !idle
             const num = (v: number) =>
               idle ? <span className="text-zinc-700">–</span> : <>{v}</>
             return (

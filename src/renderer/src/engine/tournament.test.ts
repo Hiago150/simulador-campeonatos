@@ -83,6 +83,26 @@ describe('engine — seed por posição de chegada (arrivals)', () => {
     expect(t.arrivals).toBeUndefined()
   })
 
+  it('fromSeason fica persistido no Tournament (base da trava contra vazar pro histórico)', () => {
+    const season = createTournament({
+      name: 'Da Temporada',
+      sport: 'football',
+      format: 'league',
+      teams: mkTeams(4),
+      config: baseConfig(),
+      fromSeason: true
+    })
+    expect(season.fromSeason).toBe(true)
+    const avulso = createTournament({
+      name: 'Avulso',
+      sport: 'football',
+      format: 'league',
+      teams: mkTeams(4),
+      config: baseConfig()
+    })
+    expect(avulso.fromSeason).toBeUndefined()
+  })
+
   it('grupos também respeitam arrivals na distribuição em potes (serpentina)', () => {
     const many = mkTeams(14).map((t, i) => ({ ...t, id: `m${i}` }))
     const t = createTournament({
