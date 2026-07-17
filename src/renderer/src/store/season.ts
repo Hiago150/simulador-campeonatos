@@ -236,7 +236,17 @@ export function computeMovements(
     if (n === 0) continue
 
     const relegated = upRank.slice(-n)
-    const promoted = loRank.slice(0, n)
+    let promoted = loRank.slice(0, n)
+    // play-in: a última vaga de acesso não é posicional — é o campeão do
+    // slot de play-in (ex.: Série B com repescagem, ou qualificatório à
+    // parte). Se o play-in não rodou neste ano, cai de volta pro posicional.
+    if (b.playInSlotId) {
+      const champion = rankings[b.playInSlotId]?.[0]
+      if (champion) {
+        const positional = loRank.slice(0, Math.max(0, n - 1)).filter((id) => id !== champion)
+        promoted = [...positional, champion]
+      }
+    }
 
     for (const id of relegated) {
       changeOf(upper.id).remove.add(id)
@@ -278,7 +288,8 @@ interface SeasonStore {
   setActiveSeason: (id: string | null) => void
   abandonSeason: () => void
   setPendingTournamentId: (id: string | null) => void
-  recordSlotResult: (tournament: Tournament) => void
+  /** retorna false se algo internamente falhar — nada é persistido nesse caso */
+  recordSlotResult: (tournament: Tournament) => boolean
   startNextYear: () => void
   deleteSeason: (id: string) => void
   renameSeason: (id: string, name: string) => void
@@ -339,22 +350,26 @@ export const useSeasons = create<SeasonStore>()(
 
       recordSlotResult: (tournament) => {
         const active = get().activeSeason
-        if (!active || active.status !== 'playing' || !tournament.champion) return
+        if (!active || active.status !== 'playing' || !tournament.champion) return false
 
+        try {
         const nameOf = (id: string) => tournament.teams.find((t) => t.id === id)?.name ?? id
 
         // collect scorers from this tournament
         const slotScorers: SeasonScorerEntry[] = []
-        const addScorer = (pid: string, name: string, tid: string, goals: number, kills: number) => {
+        const addScorer = (pid: string, name: string, tid: string, goals: number, kills: number, assists = 0) => {
           const ex = slotScorers.find((s) => s.playerId === pid)
-          if (ex) { ex.goals += goals; ex.kills += kills }
-          else slotScorers.push({ playerId: pid, name, teamId: tid, teamName: nameOf(tid), goals, kills })
+          if (ex) { ex.goals += goals; ex.kills += kills; ex.assists += assists }
+          else slotScorers.push({ playerId: pid, name, teamId: tid, teamName: nameOf(tid), goals, kills, assists })
         }
         for (const m of tournament.matches) {
           if (!m.played) continue
           if (m.football) {
             for (const g of m.football.goals) {
               if (!g.ownGoal) addScorer(g.playerId, g.playerName, g.teamId, 1, 0)
+              if (g.assistPlayerId && g.assistPlayerName) {
+                addScorer(g.assistPlayerId, g.assistPlayerName, g.teamId, 0, 0, 1)
+              }
             }
           } else if (m.esports) {
             for (const l of m.esports.lines) {
@@ -387,7 +402,8 @@ export const useSeasons = create<SeasonStore>()(
           })
           for (const sc of slotScorers) {
             const ex = years[yIdx].scorers.find((s) => s.playerId === sc.playerId)
-            if (ex) { ex.goals += sc.goals; ex.kills += sc.kills }
+            // dados antigos (antes das assistências) podem não ter o campo — soma defensiva
+            if (ex) { ex.goals += sc.goals; ex.kills += sc.kills; ex.assists = (ex.assists ?? 0) + sc.assists }
             else years[yIdx].scorers.push({ ...sc })
           }
           years[yIdx].records = mergeRecords(years[yIdx].records, slotRecords)
@@ -408,7 +424,7 @@ export const useSeasons = create<SeasonStore>()(
         const allTimeScorers = JSON.parse(JSON.stringify(active.allTimeScorers)) as SeasonScorerEntry[]
         for (const sc of slotScorers) {
           const ex = allTimeScorers.find((s) => s.playerId === sc.playerId)
-          if (ex) { ex.goals += sc.goals; ex.kills += sc.kills }
+          if (ex) { ex.goals += sc.goals; ex.kills += sc.kills; ex.assists = (ex.assists ?? 0) + sc.assists }
           else allTimeScorers.push({ ...sc })
         }
 
@@ -466,6 +482,11 @@ export const useSeasons = create<SeasonStore>()(
           updatedAt: Date.now()
         }
         set({ seasons: sync(get().seasons, updated), activeSeason: updated, pendingTournamentId: null })
+        return true
+        } catch (err) {
+          console.error('Falha ao concluir slot da Temporada', err)
+          return false
+        }
       },
 
       startNextYear: () => {

@@ -119,9 +119,22 @@ export const useHistory = create<HistoryState>()(
                 teamId: g.teamId,
                 teamName: nameOf(g.teamId),
                 goals: 0,
-                kills: 0
+                kills: 0,
+                assists: 0
               })
               s.goals++
+              if (g.assistPlayerId && g.assistPlayerName) {
+                const a = (data.scorers[g.assistPlayerId] ??= {
+                  playerId: g.assistPlayerId,
+                  name: g.assistPlayerName,
+                  teamId: g.teamId,
+                  teamName: nameOf(g.teamId),
+                  goals: 0,
+                  kills: 0,
+                  assists: 0
+                })
+                a.assists++
+              }
             }
           } else if (m.esports) {
             for (const l of m.esports.lines) {
@@ -131,7 +144,8 @@ export const useHistory = create<HistoryState>()(
                 teamId: l.teamId,
                 teamName: nameOf(l.teamId),
                 goals: 0,
-                kills: 0
+                kills: 0,
+                assists: 0
               })
               s.kills += l.kills
             }

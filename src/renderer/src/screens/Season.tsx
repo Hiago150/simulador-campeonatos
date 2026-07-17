@@ -62,6 +62,22 @@ function viewForStatus(status: Season['status']): MainView {
   return 'hub'
 }
 
+/** ordena artilharia (futebol, por gols) ou abates (e-sports) — mesmo critério usado em toda a Temporada */
+function compareScorers(sport: Sport, a: { goals: number; kills: number }, b: { goals: number; kills: number }): number {
+  return sport === 'esports' ? b.kills - a.kills : b.goals - a.goals
+}
+
+/** número principal (gols/abates) + assistências ao lado, quando houver (só futebol) */
+function ScorerValue({ sport, entry }: { sport: Sport; entry: { goals: number; kills: number; assists?: number } }) {
+  if (sport === 'esports') return <>{entry.kills}</>
+  return (
+    <>
+      {entry.goals}
+      {(entry.assists ?? 0) > 0 && <span className="ml-1 text-[10px] font-semibold text-zinc-500">· {entry.assists}A</span>}
+    </>
+  )
+}
+
 const REGION_LABEL: Record<string, string> = {
   americas: 'Americas',
   emea: 'EMEA',
@@ -590,8 +606,15 @@ function SeasonWizard({ onBack, onDone }: { onBack: () => void; onDone: (s: Seas
   const removeSlot = (idx: number) => {
     const removed = slots[idx]
     setSlots((prev) => prev.filter((_, i) => i !== idx))
-    // remove ligações que apontavam pro slot excluído
-    if (removed) setBoundaries((prev) => prev.filter((b) => b.upperSlotId !== removed.id && b.lowerSlotId !== removed.id))
+    if (removed) {
+      setBoundaries((prev) =>
+        prev
+          // remove ligações que apontavam pro slot excluído
+          .filter((b) => b.upperSlotId !== removed.id && b.lowerSlotId !== removed.id)
+          // se só o play-in foi excluído, a ligação sobrevive — volta a ser posicional
+          .map((b) => (b.playInSlotId === removed.id ? { ...b, playInSlotId: undefined } : b))
+      )
+    }
   }
 
   // reordena a sequência anual — qualifiesFrom/boundaries referenciam por id,
@@ -1524,6 +1547,23 @@ function BoundariesEditor({
                 <button onClick={() => remove(i)} className="shrink-0 text-zinc-600 transition-colors hover:text-blood-400">
                   <X size={14} />
                 </button>
+                <div className="flex w-full items-center gap-2">
+                  <span className="shrink-0 text-xs text-zinc-400">última vaga por play-in</span>
+                  <select
+                    className={selectCls}
+                    value={b.playInSlotId ?? ''}
+                    onChange={(e) => update(i, { playInSlotId: e.target.value || undefined })}
+                  >
+                    <option value="">Posicional (padrão)</option>
+                    {slots
+                      .filter((s) => s.id !== b.upperSlotId && s.id !== b.lowerSlotId)
+                      .map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
                 {invalid && (
                   <p className="w-full text-[11px] text-amber-300">
                     Escolha duas divisões diferentes (ambas com elenco próprio) — esta ligação será ignorada.
@@ -1577,12 +1617,8 @@ function SeasonHub({
 
   const thisYear = s.years.find((y) => y.year === s.currentYear)
   const yearChampions = thisYear?.champions ?? []
-  const yearScorers = [...(thisYear?.scorers ?? [])].sort(
-    (a, b) => (s.sport === 'esports' ? b.kills - a.kills : b.goals - a.goals)
-  )
-  const allTimeScorers = [...s.allTimeScorers].sort(
-    (a, b) => (s.sport === 'esports' ? b.kills - a.kills : b.goals - a.goals)
-  )
+  const yearScorers = [...(thisYear?.scorers ?? [])].sort((a, b) => compareScorers(s.sport, a, b))
+  const allTimeScorers = [...s.allTimeScorers].sort((a, b) => compareScorers(s.sport, a, b))
   const allTimeWins = Object.entries(s.allTimeWins)
     .sort(([, a], [, b]) => b - a)
     .slice(0, 8)
@@ -1625,6 +1661,7 @@ function SeasonHub({
     if (bulkSimulating || !currentSlot) return
     setBulkSimulating(true)
     const rosterOverrides = useApp.getState().rosterOverrides
+    const footballRosterOverrides = useApp.getState().footballRosterOverrides
 
     const stop = () => {
       setBulkSimulating(false)
@@ -1658,11 +1695,17 @@ function SeasonHub({
           teams: slotTeams,
           config: { ...slot.config, game: active.game ?? slot.config.game },
           rosterOverrides,
+          footballRosterOverrides,
           arrivals: arrivalsMap(arrivals),
           fromSeason: true
         })
         const played = simulateAll(built)
-        recordSlotResult(played)
+        const ok = recordSlotResult(played)
+        if (!ok) {
+          useApp.getState().setToast(`Não foi possível concluir "${slot.name}" — parei por aqui`)
+          stop()
+          return
+        }
       } catch (err) {
         console.error('Falha ao simular campeonato da temporada', err)
         useApp.getState().setToast(`Não foi possível simular "${slot.name}" — parei por aqui`)
@@ -1898,7 +1941,7 @@ function SeasonHub({
                             <span className="ml-1 text-[11px] text-zinc-500">— {sc.teamName}</span>
                           </div>
                           <span className="tnum shrink-0 text-xs font-bold text-blood-300">
-                            {s.sport === 'esports' ? sc.kills : sc.goals}
+                            <ScorerValue sport={s.sport} entry={sc} />
                           </span>
                         </div>
                       ))
@@ -1945,7 +1988,7 @@ function SeasonHub({
                             <span className="ml-1 text-[11px] text-zinc-500">— {sc.teamName}</span>
                           </div>
                           <span className="tnum shrink-0 text-xs font-bold text-blood-300">
-                            {s.sport === 'esports' ? sc.kills : sc.goals}
+                            <ScorerValue sport={s.sport} entry={sc} />
                           </span>
                         </div>
                       ))
@@ -2001,12 +2044,8 @@ function SeasonYearSummary({
   const poolMap = Object.fromEntries(s.teamPool.map((t) => [t.id, t]))
   const poolIds = new Set(s.teamPool.map((t) => t.id))
 
-  const yearScorers = [...(yearEntry?.scorers ?? [])].sort(
-    (a, b) => (s.sport === 'esports' ? b.kills - a.kills : b.goals - a.goals)
-  )
-  const allTimeScorers = [...s.allTimeScorers].sort(
-    (a, b) => (s.sport === 'esports' ? b.kills - a.kills : b.goals - a.goals)
-  )
+  const yearScorers = [...(yearEntry?.scorers ?? [])].sort((a, b) => compareScorers(s.sport, a, b))
+  const allTimeScorers = [...s.allTimeScorers].sort((a, b) => compareScorers(s.sport, a, b))
   const allTimeWins = Object.entries(s.allTimeWins).sort(([, a], [, b]) => b - a)
 
   // Head-to-head: top clashes between pool teams
@@ -2174,7 +2213,7 @@ function SeasonYearSummary({
                     <span className="text-[11px] text-zinc-500 truncate block">{sc.teamName}</span>
                   </div>
                   <span className="tnum text-sm font-bold text-blood-300">
-                    {s.sport === 'esports' ? sc.kills : sc.goals}
+                    <ScorerValue sport={s.sport} entry={sc} />
                   </span>
                 </div>
               ))
@@ -2197,7 +2236,7 @@ function SeasonYearSummary({
                     <span className="text-[11px] text-zinc-500 truncate block">{sc.teamName}</span>
                   </div>
                   <span className="tnum text-sm font-bold text-amber-400">
-                    {s.sport === 'esports' ? sc.kills : sc.goals}
+                    <ScorerValue sport={s.sport} entry={sc} />
                   </span>
                 </div>
               ))
@@ -2304,8 +2343,10 @@ function SeasonFinale({ onLeave, onHall }: { onLeave: () => void; onHall: () => 
   const podium = Object.entries(s.allTimeWins)
     .sort(([, a], [, b]) => b - a)
     .slice(0, 3)
+  // era encerrada: o "maior artilheiro" combina gols+assistências (futebol) —
+  // no dia-a-dia é uma tabela com as duas colunas, mas ao final vira um número só
   const topScorer = [...s.allTimeScorers].sort(
-    (a, b) => (s.sport === 'esports' ? b.kills - a.kills : b.goals - a.goals)
+    (a, b) => (s.sport === 'esports' ? b.kills - a.kills : b.goals + b.assists - (a.goals + a.assists))
   )[0]
   const streak = longestTitleStreak(s.years)
   const biggestWin = s.records?.biggestWin
@@ -2379,16 +2420,21 @@ function SeasonFinale({ onLeave, onHall }: { onLeave: () => void; onHall: () => 
             <div className="panel p-4">
               <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
                 <Medal size={13} className="text-amber-400" />
-                {s.sport === 'esports' ? 'Maior abatedor' : 'Maior artilheiro'} da era
+                {s.sport === 'esports' ? 'Maior abatedor' : 'Artilheiro + assistente'} da era
               </p>
               <p className="text-lg font-bold text-zinc-100">{topScorer.name}</p>
               <p className="text-xs text-zinc-500">{topScorer.teamName}</p>
               <p className="tnum mt-1 text-2xl font-bold text-blood-300">
-                {s.sport === 'esports' ? topScorer.kills : topScorer.goals}
+                {s.sport === 'esports' ? topScorer.kills : topScorer.goals + topScorer.assists}
                 <span className="ml-1 text-xs font-normal text-zinc-500">
-                  {s.sport === 'esports' ? 'abates' : 'gols'}
+                  {s.sport === 'esports' ? 'abates' : 'participações em gol'}
                 </span>
               </p>
+              {s.sport !== 'esports' && (
+                <p className="mt-0.5 text-[11px] text-zinc-500">
+                  {topScorer.goals} gols · {topScorer.assists} assistências
+                </p>
+              )}
             </div>
           )}
 
@@ -2690,9 +2736,7 @@ function SeasonHallOfFame({
         ) : (
           <div className="flex flex-col gap-3">
             {years.map((y) => {
-              const topScorer = [...y.scorers].sort(
-                (a, b) => (s.sport === 'esports' ? b.kills - a.kills : b.goals - a.goals)
-              )[0]
+              const topScorer = [...y.scorers].sort((a, b) => compareScorers(s.sport, a, b))[0]
               return (
                 <button
                   key={y.year}
@@ -2737,7 +2781,7 @@ function SeasonHallOfFame({
                           <span className="text-xs font-semibold text-zinc-200">{topScorer.name}</span>
                           <span className="text-[11px] text-zinc-500">— {topScorer.teamName}</span>
                           <span className="tnum ml-auto text-sm font-bold text-blood-300">
-                            {s.sport === 'esports' ? topScorer.kills : topScorer.goals}
+                            <ScorerValue sport={s.sport} entry={topScorer} />
                           </span>
                         </div>
                       </div>
@@ -2882,9 +2926,7 @@ function SeasonYearDetail({
   const poolMap = Object.fromEntries(s.teamPool.map((t) => [t.id, t]))
   const entry = s.years.find((y) => y.year === year)
 
-  const scorers = [...(entry?.scorers ?? [])].sort(
-    (a, b) => (s.sport === 'esports' ? b.kills - a.kills : b.goals - a.goals)
-  )
+  const scorers = [...(entry?.scorers ?? [])].sort((a, b) => compareScorers(s.sport, a, b))
   const isEsports = s.sport === 'esports'
   // recordes do ANO isolado (com fallback ao all-time p/ temporadas antigas sem por-ano)
   const yr = entry?.records ?? {}
@@ -2987,7 +3029,7 @@ function SeasonYearDetail({
                       <span className="flex-1 truncate text-sm font-semibold text-zinc-200">{sc.name}</span>
                       <span className="truncate text-[11px] text-zinc-500">{sc.teamName}</span>
                       <span className="tnum w-8 text-right text-sm font-bold text-blood-300">
-                        {isEsports ? sc.kills : sc.goals}
+                        <ScorerValue sport={s.sport} entry={sc} />
                       </span>
                     </div>
                   ))}

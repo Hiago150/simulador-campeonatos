@@ -173,3 +173,43 @@ describe('e-sports — prorrogação', () => {
     }
   })
 })
+
+describe('futebol — assistências', () => {
+  function playedFootballGoals() {
+    const t = simulateAll(
+      createTournament({
+        name: 'Liga',
+        sport: 'football',
+        format: 'league',
+        teams: mkTeams(10, 'football'),
+        config: baseConfig({ homeAndAway: true })
+      })
+    )
+    return t.matches.filter((m) => m.played && m.football).flatMap((m) => m.football!.goals)
+  }
+
+  it('gol contra nunca tem assistência', () => {
+    const goals = playedFootballGoals()
+    for (const g of goals.filter((g) => g.ownGoal)) {
+      expect(g.assistPlayerId).toBeUndefined()
+    }
+  })
+
+  it('assistência, quando existe, é de um companheiro (mesmo time, jogador diferente do artilheiro)', () => {
+    const goals = playedFootballGoals()
+    const withAssist = goals.filter((g) => g.assistPlayerId)
+    expect(withAssist.length).toBeGreaterThan(0)
+    for (const g of withAssist) {
+      expect(g.assistPlayerId).not.toBe(g.playerId)
+      expect(g.assistPlayerName).toBeTruthy()
+    }
+  })
+
+  it('proporção de gols com assistência fica perto de ~75% (numa amostra grande)', () => {
+    const goals = playedFootballGoals().filter((g) => !g.ownGoal)
+    expect(goals.length).toBeGreaterThan(50)
+    const rate = goals.filter((g) => g.assistPlayerId).length / goals.length
+    expect(rate).toBeGreaterThan(0.6)
+    expect(rate).toBeLessThan(0.9)
+  })
+})

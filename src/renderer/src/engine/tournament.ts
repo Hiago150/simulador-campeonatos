@@ -9,7 +9,7 @@ import type {
   TournamentPhase,
   Team
 } from '../types'
-import { ensureSquad, type RosterOverrides } from './names'
+import { ensureSquad, type FootballRosterOverrides, type RosterOverrides } from './names'
 import { shuffle, uid } from './rng'
 import { simulateMatch, type SimContext } from './simulate'
 import { buildLeagueMatches, roundRobinPairings } from './schedule'
@@ -35,6 +35,8 @@ export interface CreateInput {
   config: TournamentConfig
   /** elencos de e-sports editados pelo usuário (por jogo + time) */
   rosterOverrides?: RosterOverrides
+  /** elencos de futebol editados pelo usuário (por time) */
+  footballRosterOverrides?: FootballRosterOverrides
   /** posição de chegada de cada time (classificado via qualifiesFrom na Temporada) */
   arrivals?: Record<string, { fromSlotId?: string; rank?: number }>
   /** true só quando a própria Temporada está criando este campeonato (nunca no avulso) */
@@ -97,7 +99,7 @@ function genericSeedLabels(arrivals?: Arrivals): Record<string, string> | undefi
 
 export function createTournament(input: CreateInput): Tournament {
   const game = input.sport === 'esports' ? input.config.game : undefined
-  const teams = input.teams.map((t) => ensureSquad(t, game, input.rosterOverrides))
+  const teams = input.teams.map((t) => ensureSquad(t, game, input.rosterOverrides, input.footballRosterOverrides))
   const teamIds = teams.map((t) => t.id)
   const now = Date.now()
 
@@ -272,27 +274,53 @@ function bracketMatchIds(t: Tournament): Set<string> {
   return set
 }
 
-/** descobre se uma partida é jogo de ida/volta de um confronto agregado */
+/**
+ * descobre se uma partida é jogo de ida/volta de um confronto agregado.
+ * O jogo decisivo (que fecha o agregado) é sempre o que for simulado por
+ * ÚLTIMO na prática — normalmente a volta, mas o usuário agora pode assistir/
+ * simular a volta antes da ida (Modo Assistir não depende mais da ordem), então
+ * qualquer uma das duas pode ser a "segunda a ser jogada" e só nesse caso ela
+ * decide o agregado.
+ */
 function legInfo(
   t: Tournament,
   matchId: string
-): { isLeg1: boolean; isLeg2: boolean; firstLeg?: { homeGoals: number; awayGoals: number } } {
-  if (!t.bracket) return { isLeg1: false, isLeg2: false }
+): { isLeg1: boolean; isLeg2: boolean; decisive: boolean; firstLeg?: { homeGoals: number; awayGoals: number } } {
+  if (!t.bracket) return { isLeg1: false, isLeg2: false, decisive: false }
   for (const round of t.bracket) {
     for (const bm of round.matches) {
       if (!bm.legIds || bm.legIds.length !== 2) continue
-      if (bm.legIds[0] === matchId) return { isLeg1: true, isLeg2: false }
+      if (bm.legIds[0] === matchId) {
+        const volta = t.matches.find((m) => m.id === bm.legIds![1])
+        if (volta?.played) {
+          // volta foi jogada primeiro (fora de ordem) → esta ida fecha o agregado.
+          // o mando da ida é o visitante da volta → mapeia os gols da volta
+          return {
+            isLeg1: true,
+            isLeg2: false,
+            decisive: true,
+            firstLeg: { homeGoals: volta.awayScore, awayGoals: volta.homeScore }
+          }
+        }
+        return { isLeg1: true, isLeg2: false, decisive: false }
+      }
       if (bm.legIds[1] === matchId) {
         const ida = t.matches.find((m) => m.id === bm.legIds![0])
-        // o mando da volta é o visitante da ida → mapeia os gols da ida
-        const firstLeg = ida
-          ? { homeGoals: ida.awayScore, awayGoals: ida.homeScore }
-          : { homeGoals: 0, awayGoals: 0 }
-        return { isLeg1: false, isLeg2: true, firstLeg }
+        if (ida?.played) {
+          // o mando da volta é o visitante da ida → mapeia os gols da ida
+          return {
+            isLeg1: false,
+            isLeg2: true,
+            decisive: true,
+            firstLeg: { homeGoals: ida.awayScore, awayGoals: ida.homeScore }
+          }
+        }
+        // volta sendo jogada antes da ida — ainda não há agregado pra fechar
+        return { isLeg1: false, isLeg2: true, decisive: false }
       }
     }
   }
-  return { isLeg1: false, isLeg2: false }
+  return { isLeg1: false, isLeg2: false, decisive: false }
 }
 
 function simContextFor(t: Tournament, match: Match, koSet: Set<string>): SimContext {
@@ -303,8 +331,9 @@ function simContextFor(t: Tournament, match: Match, koSet: Set<string>): SimCont
     game: t.config.game
   }
   const leg = legInfo(t, match.id)
-  if (leg.isLeg1) return { ...base, neutral: true, decisive: false }
-  if (leg.isLeg2) return { ...base, neutral: true, decisive: true, firstLeg: leg.firstLeg }
+  if (leg.isLeg1 || leg.isLeg2) {
+    return { ...base, neutral: true, decisive: leg.decisive, firstLeg: leg.firstLeg }
+  }
   if (koSet.has(match.id)) return { ...base, neutral: true, decisive: true }
   if (t.format === 'swiss') return { ...base, neutral: true, decisive: false }
   return { ...base, neutral: false, decisive: false }

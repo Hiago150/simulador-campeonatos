@@ -170,4 +170,47 @@ describe('computeMovements — acesso/descenso entre divisões', () => {
     // no máximo floor(3/2) = 1 por lado
     expect(movements).toHaveLength(2)
   })
+
+  it('play-in: o campeão do play-in substitui a última vaga posicional', () => {
+    const slots = [
+      mkSlot('a', 'Série A', ['a1', 'a2', 'a3', 'a4']),
+      mkSlot('b', 'Série B', ['b1', 'b2', 'b3', 'b4']),
+      mkSlot('playin', 'Repescagem', [])
+    ]
+    const rankings = {
+      a: ['a2', 'a1', 'a4', 'a3'], // últimos 2: a4, a3
+      b: ['b3', 'b1', 'b2', 'b4'], // primeiros 2 posicionais seriam: b3, b1
+      playin: ['b4', 'b2'] // campeão do play-in: b4 (não estaria entre os promovidos posicionais)
+    }
+    const { slots: next, movements } = computeMovements(
+      slots,
+      [{ upperSlotId: 'a', lowerSlotId: 'b', count: 2, playInSlotId: 'playin' }],
+      rankings,
+      (id) => id
+    )
+    // 1 vaga posicional (b3) + 1 vaga do play-in (b4), não b1
+    expect(movements.filter((m) => m.kind === 'promotion').map((m) => m.teamId).sort()).toEqual(['b3', 'b4'])
+    expect(next[0].teamIds!.sort()).toEqual(['a1', 'a2', 'b3', 'b4'])
+    expect(next[1].teamIds!.sort()).toEqual(['a3', 'a4', 'b1', 'b2'])
+  })
+
+  it('play-in sem classificação neste ano cai de volta pro posicional', () => {
+    const slots = [
+      mkSlot('a', 'Série A', ['a1', 'a2', 'a3', 'a4']),
+      mkSlot('b', 'Série B', ['b1', 'b2', 'b3', 'b4']),
+      mkSlot('playin', 'Repescagem', [])
+    ]
+    const rankings = {
+      a: ['a2', 'a1', 'a4', 'a3'],
+      b: ['b3', 'b1', 'b2', 'b4']
+      // sem entrada pra 'playin' neste ano
+    }
+    const { movements } = computeMovements(
+      slots,
+      [{ upperSlotId: 'a', lowerSlotId: 'b', count: 2, playInSlotId: 'playin' }],
+      rankings,
+      (id) => id
+    )
+    expect(movements.filter((m) => m.kind === 'promotion').map((m) => m.teamId).sort()).toEqual(['b1', 'b3'])
+  })
 })

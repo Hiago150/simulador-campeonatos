@@ -288,6 +288,7 @@ export interface IdolEntry {
   teamName: string
   goals: number
   kills: number
+  assists: number
   mvps: number
   /** títulos do time do jogador na era (elencos não mudam de clube) */
   titles: number
@@ -298,11 +299,15 @@ export interface IdolEntry {
 export function eraIdols(season: Season): IdolEntry[] {
   const esports = isEsports(season)
   const mvpsOf = (pid: string) => season.records?.mvpCounts?.[pid]?.count ?? 0
+  // valor de produção pro ranking da era: abates (e-sports) ou gols+assistências
+  // somados (futebol) — ao final da era, "artilheiro+assistente" é um número só
+  const valueOf = (x: { goals: number; kills: number; assists?: number }) =>
+    esports ? x.kills : x.goals + (x.assists ?? 0)
   const out: IdolEntry[] = season.allTimeScorers.map((s) => {
     const perYear = season.years
       .map((y) => {
         const e = y.scorers.find((x) => x.playerId === s.playerId)
-        return { year: y.year, value: e ? (esports ? e.kills : e.goals) : 0 }
+        return { year: y.year, value: e ? valueOf(e) : 0 }
       })
       .filter((x) => x.value > 0)
     const bestYear = [...perYear].sort((a, b) => b.value - a.value)[0]
@@ -313,13 +318,14 @@ export function eraIdols(season: Season): IdolEntry[] {
       teamName: s.teamName,
       goals: s.goals,
       kills: s.kills,
+      assists: s.assists ?? 0,
       mvps: mvpsOf(s.playerId),
       titles: season.allTimeWins[s.teamId] ?? 0,
       bestYear,
       perYear
     }
   })
-  return out.sort((a, b) => (esports ? b.kills - a.kills : b.goals - a.goals))
+  return out.sort((a, b) => valueOf(b) - valueOf(a))
 }
 
 // ─────────────────────── Confrontos históricos da era ───────────────────────

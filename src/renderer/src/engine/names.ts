@@ -5,6 +5,15 @@ import { getEsportsRoster, rosterKey } from '../data/esports-rosters'
 
 /** Overrides de elenco editados pelo usuário, chaveados por `${game}::${teamId}`. */
 export type RosterOverrides = Record<string, string[]>
+
+/** Jogador de futebol editado pelo usuário (nome, posição, influência). */
+export interface FootballPlayerOverride {
+  name: string
+  position: Position
+  influence: number
+}
+/** Overrides de elenco de futebol, chaveados por teamId (futebol não tem `game`). */
+export type FootballRosterOverrides = Record<string, FootballPlayerOverride[]>
 import { hashString, mulberry32 } from './rng'
 
 const BR_FIRST = [
@@ -48,7 +57,21 @@ function fmtName(first: string, last: string): string {
   return `${first} ${last}`
 }
 
-export function generateSquad(team: Team, game?: EsportsGame, rosterOverrides?: RosterOverrides): Player[] {
+export function generateSquad(
+  team: Team,
+  game?: EsportsGame,
+  rosterOverrides?: RosterOverrides,
+  footballRosterOverrides?: FootballRosterOverrides
+): Player[] {
+  // Elenco de futebol editado pelo usuário — vale pra qualquer time, mesmo
+  // com dados reais (o usuário pode querer só ajustar a influência de alguém).
+  if (team.sport === 'football') {
+    const override = footballRosterOverrides?.[team.id]
+    if (override && override.length > 0) {
+      return override.map((p, i) => ({ id: `${team.id}_p${i}`, name: p.name, position: p.position, influence: p.influence }))
+    }
+  }
+
   // Elenco real (TheSportsDB), quando disponível para o time
   if (team.sport === 'football') {
     const real = getSquadData(team.id)
@@ -120,9 +143,14 @@ export function generateSquad(team: Team, game?: EsportsGame, rosterOverrides?: 
 }
 
 /** Garante que o time tenha um elenco gerado (mutação idempotente). */
-export function ensureSquad(team: Team, game?: EsportsGame, rosterOverrides?: RosterOverrides): Team {
+export function ensureSquad(
+  team: Team,
+  game?: EsportsGame,
+  rosterOverrides?: RosterOverrides,
+  footballRosterOverrides?: FootballRosterOverrides
+): Team {
   if (team.squad && team.squad.length > 0) return team
-  return { ...team, squad: generateSquad(team, game, rosterOverrides) }
+  return { ...team, squad: generateSquad(team, game, rosterOverrides, footballRosterOverrides) }
 }
 
 /** Nomes do elenco efetivo de e-sports (editado → curado → procedural). */

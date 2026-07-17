@@ -22,6 +22,8 @@ export interface Player {
   id: string
   name: string
   position: Position // no e-sports reaproveitamos como "role" visual
+  /** protagonismo do jogador nos gols/assistências (0.5–2.0) — ausente = 1.0 (neutro) */
+  influence?: number
 }
 
 export interface Team {
@@ -51,6 +53,8 @@ export interface Goal {
   playerId: string
   playerName: string
   ownGoal?: boolean
+  assistPlayerId?: string
+  assistPlayerName?: string
 }
 
 export interface FootballDetail {
@@ -269,6 +273,7 @@ export interface ScorerRecord {
   teamName: string
   goals: number // futebol
   kills: number // e-sports
+  assists: number // futebol
 }
 
 export interface HeadToHead {
@@ -367,6 +372,7 @@ export interface SeasonScorerEntry {
   teamName: string
   goals: number
   kills: number
+  assists: number
 }
 
 export interface SeasonYearEntry {
@@ -410,6 +416,11 @@ export interface DivisionBoundary {
   upperSlotId: string
   lowerSlotId: string
   count: number
+  /** se definido: a última vaga de acesso (dentre as `count`) não é decidida
+   *  pela posição na tabela — é o campeão deste slot de play-in (ex.: Série B
+   *  com uma última vaga decidida à parte, ou um qualificatório pra outro
+   *  campeonato) */
+  playInSlotId?: string
 }
 
 /** força base de um time (captada na criação) — usada na evolução entre anos */

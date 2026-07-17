@@ -45,35 +45,30 @@ export interface ScorerLine {
   name: string
   teamId: string
   value: number
+  /** assistências (só futebol — 0 no e-sports) */
+  assists: number
 }
 
 /** Artilharia (futebol) ou abates (e-sports) dentro do torneio. */
 export function tournamentScorers(t: Tournament, limit = 10): ScorerLine[] {
   const acc = new Map<string, ScorerLine>()
+  const bump = (id: string, name: string, teamId: string, value: number, assists: number) => {
+    const cur = acc.get(id) ?? { playerId: id, name, teamId, value: 0, assists: 0 }
+    cur.value += value
+    cur.assists += assists
+    acc.set(id, cur)
+  }
   for (const m of t.matches) {
     if (!m.played) continue
     if (t.sport === 'football' && m.football) {
       for (const g of m.football.goals) {
         if (g.ownGoal) continue
-        const cur = acc.get(g.playerId) ?? {
-          playerId: g.playerId,
-          name: g.playerName,
-          teamId: g.teamId,
-          value: 0
-        }
-        cur.value += 1
-        acc.set(g.playerId, cur)
+        bump(g.playerId, g.playerName, g.teamId, 1, 0)
+        if (g.assistPlayerId && g.assistPlayerName) bump(g.assistPlayerId, g.assistPlayerName, g.teamId, 0, 1)
       }
     } else if (t.sport === 'esports' && m.esports) {
       for (const l of m.esports.lines) {
-        const cur = acc.get(l.playerId) ?? {
-          playerId: l.playerId,
-          name: l.name,
-          teamId: l.teamId,
-          value: 0
-        }
-        cur.value += l.kills
-        acc.set(l.playerId, cur)
+        bump(l.playerId, l.name, l.teamId, l.kills, 0)
       }
     }
   }

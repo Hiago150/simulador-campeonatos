@@ -57,9 +57,9 @@ export function matchMoments(m: Match, teams: Record<string, Team>): Moment[] {
         icon: g.ownGoal ? '🔴' : '⚽',
         tone: 'goal',
         highlight: virada ? 'decisive' : undefined,
-        text: `${g.minute}' ${g.playerName}${g.ownGoal ? ' (contra)' : ''} — ${home} ${h}–${a} ${away}${
-          virada ? ' · virada!' : ''
-        }`
+        text: `${g.minute}' ${g.playerName}${g.ownGoal ? ' (contra)' : ''}${
+          !g.ownGoal && g.assistPlayerName ? ` (assist. ${g.assistPlayerName})` : ''
+        } — ${home} ${h}–${a} ${away}${virada ? ' · virada!' : ''}`
       }
       goalMoments.push({ moment, scorerIsHome: homeGoal, nthOfScorer: homeGoal ? h : a })
       out.push(moment)

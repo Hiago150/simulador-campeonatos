@@ -11,6 +11,7 @@ import {
   simulateRound,
   type CreateInput
 } from '../engine/tournament'
+import type { FootballPlayerOverride } from '../engine/names'
 import { uid } from '../engine/rng'
 import { useHistory } from './history'
 
@@ -62,6 +63,11 @@ interface AppState {
   setRosterOverride: (game: EsportsGame, teamId: string, names: string[]) => void
   resetRosterOverride: (game: EsportsGame, teamId: string) => void
 
+  // elencos de futebol editados pelo usuário (por time — sem dimensão de jogo)
+  footballRosterOverrides: Record<string, FootballPlayerOverride[]>
+  setFootballRosterOverride: (teamId: string, players: FootballPlayerOverride[]) => void
+  resetFootballRosterOverride: (teamId: string) => void
+
   startTournament: (input: CreateInput, monteCarlo?: number) => void
   repeatTournament: (blueprint: SetupBlueprint) => void
   simMatch: (matchId: string) => void
@@ -71,6 +77,10 @@ interface AppState {
   concludeTournament: () => void
   reset: () => void
   closeTournament: () => void
+  // como closeTournament, mas não mexe em `screen` — usado quando o chamador
+  // já vai navegar em seguida (ex.: go('season')), pra não haver uma tela
+  // "home" intermediária nem depender de dois `set` concordarem
+  clearCurrentTournament: () => void
 
   // Monte Carlo: re-simula o torneio inteiro N vezes e conta os campeões
   // (efêmero — não entra no histórico)
@@ -106,6 +116,7 @@ export const useApp = create<AppState>()(
       customTeams: [],
       teamOverrides: {},
       rosterOverrides: {},
+      footballRosterOverrides: {},
       toast: null,
       pendingFormat: null,
       pendingSport: null,
@@ -185,8 +196,21 @@ export const useApp = create<AppState>()(
         set({ rosterOverrides: next })
       },
 
+      setFootballRosterOverride: (teamId, players) =>
+        set({ footballRosterOverrides: { ...get().footballRosterOverrides, [teamId]: players } }),
+
+      resetFootballRosterOverride: (teamId) => {
+        const next = { ...get().footballRosterOverrides }
+        delete next[teamId]
+        set({ footballRosterOverrides: next })
+      },
+
       startTournament: (input, monteCarlo) => {
-        const t = createTournament({ ...input, rosterOverrides: get().rosterOverrides })
+        const t = createTournament({
+          ...input,
+          rosterOverrides: get().rosterOverrides,
+          footballRosterOverrides: get().footballRosterOverrides
+        })
         set({
           current: t,
           screen: 'tournament',
@@ -206,7 +230,8 @@ export const useApp = create<AppState>()(
           format: b.format,
           teams: b.teams,
           config: b.config,
-          rosterOverrides: get().rosterOverrides
+          rosterOverrides: get().rosterOverrides,
+          footballRosterOverrides: get().footballRosterOverrides
         })
         // zera qualquer sessão de Monte Carlo/revisão herdada do campeonato anterior
         set({
@@ -306,7 +331,8 @@ export const useApp = create<AppState>()(
           format: cur.format,
           teams: cur.teams,
           config: cur.config,
-          rosterOverrides: get().rosterOverrides
+          rosterOverrides: get().rosterOverrides,
+          footballRosterOverrides: get().footballRosterOverrides
         })
         const done = simulateAll(fresh)
         const tally = { ...mcTally }
@@ -335,6 +361,9 @@ export const useApp = create<AppState>()(
 
       closeTournament: () =>
         set({ current: null, screen: 'home', mcTarget: 0, mcDone: 0, mcTally: {}, lastRoundIds: [], reviewMode: false }),
+
+      clearCurrentTournament: () =>
+        set({ current: null, mcTarget: 0, mcDone: 0, mcTally: {}, lastRoundIds: [], reviewMode: false }),
 
       viewTournament: (t) => {
         // revisão somente-leitura (ex.: campeonato já concluído de um ano da Temporada) —
@@ -383,6 +412,7 @@ export const useApp = create<AppState>()(
         current: s.current,
         teamOverrides: s.teamOverrides,
         rosterOverrides: s.rosterOverrides,
+        footballRosterOverrides: s.footballRosterOverrides,
         mcTarget: s.mcTarget,
         mcDone: s.mcDone,
         mcTally: s.mcTally

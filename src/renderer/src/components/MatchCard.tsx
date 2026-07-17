@@ -27,7 +27,7 @@ function Side({
   return (
     <div
       className={cx(
-        'flex min-w-0 flex-1 items-center gap-2.5',
+        'flex min-w-0 flex-1 items-center gap-2 sm:gap-2.5',
         align === 'right' && 'flex-row-reverse text-right'
       )}
     >
@@ -67,17 +67,17 @@ export function MatchCard({ match, home, away, sport, onSimulate, onReRoll, onOp
       )}
       onClick={() => onOpen?.()}
     >
-      <div className="flex items-center gap-3 px-3.5 py-3">
+      <div className="flex items-center gap-2 px-3 py-3 sm:gap-3 sm:px-3.5">
         <Side team={home} played={played} winner={homeWon} align="left" />
 
-        <div className="flex shrink-0 flex-col items-center px-1">
+        <div className="flex shrink-0 flex-col items-center px-0.5 sm:px-1">
           {played ? (
-            <div className="flex items-baseline gap-2">
-              <span className={cx('tnum heading text-2xl font-bold', homeWon ? 'text-white' : 'text-zinc-500')}>
+            <div className="flex items-baseline gap-1.5 sm:gap-2">
+              <span className={cx('tnum heading text-xl font-bold sm:text-2xl', homeWon ? 'text-white' : 'text-zinc-500')}>
                 {match.homeScore}
               </span>
               <span className="text-sm text-blood-700">×</span>
-              <span className={cx('tnum heading text-2xl font-bold', awayWon ? 'text-white' : 'text-zinc-500')}>
+              <span className={cx('tnum heading text-xl font-bold sm:text-2xl', awayWon ? 'text-white' : 'text-zinc-500')}>
                 {match.awayScore}
               </span>
             </div>
@@ -99,7 +99,7 @@ export function MatchCard({ match, home, away, sport, onSimulate, onReRoll, onOp
 
         <Side team={away} played={played} winner={awayWon} align="right" />
 
-        <div className="ml-1 flex shrink-0 items-center gap-1.5" onClick={(ev) => ev.stopPropagation()}>
+        <div className="ml-0.5 flex shrink-0 items-center gap-1.5 sm:ml-1" onClick={(ev) => ev.stopPropagation()}>
           {canPlay && onSimulate && (
             <button
               onClick={onSimulate}

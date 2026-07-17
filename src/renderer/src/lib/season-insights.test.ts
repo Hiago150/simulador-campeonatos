@@ -180,6 +180,18 @@ describe('eraIdols — lendas da era', () => {
     expect(idol.bestYear).toEqual({ year: 1, value: 30 })
     expect(idol.perYear).toHaveLength(2)
   })
+
+  it('futebol: ranking da era soma gols+assistências (um artilheiro puro pode perder pra um mais completo)', () => {
+    const s = season({
+      allTimeScorers: [
+        { playerId: 'artilheiro', name: 'Artilheiro', teamId: 'alpha', teamName: 'ALPHA', goals: 20, kills: 0, assists: 0 },
+        { playerId: 'completo', name: 'Completo', teamId: 'beta', teamName: 'BETA', goals: 15, kills: 0, assists: 10 }
+      ],
+      allTimeWins: {}
+    })
+    const idols = eraIdols(s)
+    expect(idols.map((i) => i.playerId)).toEqual(['completo', 'artilheiro'])
+  })
 })
 
 describe('eraHeadToHead — confrontos acumulados dos torneios salvos', () => {

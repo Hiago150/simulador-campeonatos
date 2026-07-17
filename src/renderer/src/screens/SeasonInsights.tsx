@@ -232,7 +232,8 @@ function IdolRow({
   open: boolean
   onToggle: () => void
 }) {
-  const value = isEsports ? idol.kills : idol.goals
+  // ídolos da era: gols+assistências somados (futebol) — mesmo critério de eraIdols()
+  const value = isEsports ? idol.kills : idol.goals + idol.assists
   return (
     <div>
       <button onClick={onToggle} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left transition hover:bg-white/[0.02]">
@@ -240,6 +241,11 @@ function IdolRow({
         <TeamBadge team={team} size="sm" />
         <span className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-200">{idol.name}</span>
         <span className="hidden truncate text-[11px] text-zinc-500 sm:inline">{idol.teamName}</span>
+        {!isEsports && (idol.goals > 0 || idol.assists > 0) && (
+          <span className="hidden shrink-0 text-[10px] text-zinc-600 md:inline">
+            {idol.goals}G · {idol.assists}A
+          </span>
+        )}
         {isEsports && idol.mvps > 0 && (
           <span className="tag shrink-0 border-amber-700/40 text-[10px] text-amber-300">{idol.mvps} MVP</span>
         )}
@@ -257,7 +263,7 @@ function IdolRow({
           {idol.bestYear && (
             <p className="mb-2 text-xs text-zinc-400">
               Melhor temporada: <span className="font-bold text-zinc-200">Ano {idol.bestYear.year}</span> —{' '}
-              {idol.bestYear.value} {isEsports ? 'abates' : 'gols'}
+              {idol.bestYear.value} {isEsports ? 'abates' : 'participações em gol'}
             </p>
           )}
           <div className="flex flex-wrap gap-1.5">
@@ -325,8 +331,9 @@ export function ClubsTab({
 }) {
   const chart = useMemo(() => eraStrengthSeries(season), [season])
   const clubs = useMemo(() => {
-    const withTitles = Object.entries(season.allTimeWins).sort(([, a], [, b]) => b - a)
-    return withTitles.map(([id, wins]) => ({ id, wins, team: poolMap[id] }))
+    return season.teamPool
+      .map((t) => ({ id: t.id, wins: season.allTimeWins[t.id] ?? 0, team: poolMap[t.id] }))
+      .sort((a, b) => b.wins - a.wins || (a.team?.name ?? a.id).localeCompare(b.team?.name ?? b.id))
   }, [season, poolMap])
 
   if (focusTeamId) {
@@ -391,10 +398,10 @@ export function ClubsTab({
 
       <div>
         <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-          Clubes com título — clique pra abrir o perfil
+          Todos os clubes da era — clique pra abrir o perfil
         </p>
         {clubs.length === 0 ? (
-          <Empty text="Nenhum título ainda." />
+          <Empty text="Nenhum clube na temporada ainda." />
         ) : (
           <div className="grid gap-2 sm:grid-cols-2">
             {clubs.map((c) => (
@@ -407,7 +414,9 @@ export function ClubsTab({
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-200">
                   {c.team?.name ?? c.id}
                 </span>
-                <span className="tnum shrink-0 text-sm font-bold text-amber-400">{c.wins}×</span>
+                <span className={cx('tnum shrink-0 text-sm font-bold', c.wins > 0 ? 'text-amber-400' : 'text-zinc-600')}>
+                  {c.wins > 0 ? `${c.wins}×` : '—'}
+                </span>
               </button>
             ))}
           </div>
@@ -501,7 +510,7 @@ function ClubProfileView({
               <div key={i.playerId} className="flex items-center gap-2 text-sm">
                 <span className="min-w-0 flex-1 truncate font-semibold text-zinc-200">{i.name}</span>
                 {isEsports && i.mvps > 0 && <span className="tag shrink-0 text-[10px] text-amber-300">{i.mvps} MVP</span>}
-                <span className="tnum shrink-0 font-bold text-blood-300">{isEsports ? i.kills : i.goals}</span>
+                <span className="tnum shrink-0 font-bold text-blood-300">{isEsports ? i.kills : i.goals + i.assists}</span>
               </div>
             ))}
           </div>

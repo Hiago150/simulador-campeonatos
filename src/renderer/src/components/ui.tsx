@@ -178,12 +178,14 @@ export function Slider({
   value,
   onChange,
   min = 1,
-  max = 100
+  max = 100,
+  step = 1
 }: {
   value: number
   onChange: (v: number) => void
   min?: number
   max?: number
+  step?: number
 }) {
   const pct = ((value - min) / (max - min)) * 100
   return (
@@ -191,6 +193,7 @@ export function Slider({
       type="range"
       min={min}
       max={max}
+      step={step}
       value={value}
       onChange={(e) => onChange(Number(e.target.value))}
       className="no-drag h-2 w-full cursor-pointer appearance-none rounded-full outline-none

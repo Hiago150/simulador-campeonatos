@@ -48,7 +48,7 @@ import {
   type RoundHighlight,
   type TournamentNarration
 } from '../lib/narration'
-import { Button } from '../components/ui'
+import { Button, Modal } from '../components/ui'
 import { TeamBadge } from '../components/TeamBadge'
 import { cx } from '../lib/cx'
 
@@ -78,6 +78,8 @@ export function TournamentScreen() {
   const exportCurrent = useApp((s) => s.exportCurrent)
   const go = useApp((s) => s.go)
   const closeTournament = useApp((s) => s.closeTournament)
+  const clearCurrentTournament = useApp((s) => s.clearCurrentTournament)
+  const setToast = useApp((s) => s.setToast)
   const reviewMode = useApp((s) => s.reviewMode)
   const committedIds = useHistory((s) => s.committedIds)
 
@@ -131,10 +133,15 @@ export function TournamentScreen() {
   const handleConclude = () => {
     if (isSeasonTournament) {
       // temporada é isolada do histórico global — só registra na própria temporada.
-      // Limpa o `current` (closeTournament) pra ele não sobrar como "em andamento"
-      // na Home e acabar concluído de novo fora da temporada (dupla contagem).
-      recordSlotResult(t)
-      closeTournament()
+      // Só navega/limpa o `current` se o registro deu certo — se recordSlotResult
+      // falhar, ficamos na tela do campeonato (sem perder nada) em vez de sumir
+      // pra Home com a temporada travada um passo atrás.
+      const ok = recordSlotResult(t)
+      if (!ok) {
+        setToast('Não foi possível concluir esse campeonato — tente novamente')
+        return
+      }
+      clearCurrentTournament()
       go('season')
     } else {
       concludeTournament()
@@ -144,7 +151,7 @@ export function TournamentScreen() {
   const handleClose = () => {
     if (isSeasonTournament) go('season')
     else if (reviewMode) {
-      closeTournament()
+      clearCurrentTournament()
       go('season')
     } else closeTournament()
   }
@@ -159,37 +166,39 @@ export function TournamentScreen() {
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="border-b border-white/5 bg-ink-950/60 px-4 py-4 md:px-6">
-        <div className="mb-3 flex items-start justify-between gap-4">
-          <div className="flex items-start gap-3">
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-x-4 gap-y-2.5">
+          <div className="flex min-w-0 items-start gap-3">
             <button
               onClick={handleClose}
-              className="mt-1 flex h-8 w-8 items-center justify-center rounded-lg border border-white/5 bg-white/[0.03] text-zinc-400 hover:text-white"
+              className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/5 bg-white/[0.03] text-zinc-400 hover:text-white md:mt-1"
             >
               <ChevronLeft size={18} />
             </button>
-            <div>
-              <h1 className="display text-4xl text-zinc-100">{t.name}</h1>
-              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+            <div className="min-w-0">
+              <h1 className="display text-2xl leading-tight text-zinc-100 md:text-4xl">{t.name}</h1>
+              {/* Badges informativas — só no desktop; no mobile o espaço é do que é usável */}
+              <div className="mt-1.5 hidden flex-wrap items-center gap-2 md:flex">
                 <span className="tag bg-ink-800 text-zinc-300">
                   {SPORT_META[t.sport].emoji} {SPORT_META[t.sport].label}
                 </span>
                 {t.sport === 'esports' && t.config.game && (
-                  <span className="tag hidden bg-ink-800 text-zinc-300 sm:inline-flex">
+                  <span className="tag bg-ink-800 text-zinc-300">
                     {GAME_META[t.config.game].emoji} {GAME_META[t.config.game].short}
                   </span>
                 )}
                 <span className="tag bg-ink-800 text-zinc-300">{meta.label}</span>
                 {chaosLabel(t.config) && (
-                  <span className="tag hidden bg-blood-950/50 text-blood-300 sm:inline-flex">🎲 {chaosLabel(t.config)}</span>
+                  <span className="tag bg-blood-950/50 text-blood-300">🎲 {chaosLabel(t.config)}</span>
                 )}
-                {t.config.momentum && <span className="tag hidden bg-ink-800 text-zinc-300 sm:inline-flex">🔥 Forma</span>}
+                {t.config.momentum && <span className="tag bg-ink-800 text-zinc-300">🔥 Forma</span>}
                 <span className="tag bg-ink-800 text-zinc-500">{t.teams.length} times</span>
               </div>
             </div>
           </div>
 
-          {/* Ações */}
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          {/* Ações — no mobile quebram pra uma linha própria, largura natural,
+              alinhadas à esquerda; no desktop voltam a alinhar à direita */}
+          <div className="flex w-full flex-wrap items-center gap-2 md:w-auto md:justify-end">
             <HeaderMenu
               items={[
                 ...(reviewMode ? [] : [{ label: 'Refazer', icon: <RotateCcw size={15} />, onClick: handleReset }]),
@@ -200,19 +209,25 @@ export function TournamentScreen() {
               <Button
                 icon={<FastForward size={15} />}
                 disabled={roundInfo.matchIds.length === 0}
+                className="whitespace-nowrap"
                 onClick={simRound}
               >
                 Simular {roundInfo.label.split(' · ')[0].toLowerCase()}
               </Button>
             )}
             {!finished && !mcActive && t.phase === 'group' && (
-              <Button icon={<LayoutGrid size={15} />} onClick={simPhase}>
+              <Button icon={<LayoutGrid size={15} />} className="whitespace-nowrap" onClick={simPhase}>
                 <span className="hidden sm:inline">Simular fase de grupos</span>
                 <span className="sm:hidden">Fase de grupos</span>
               </Button>
             )}
             {!finished && !mcActive && (
-              <Button variant="primary" icon={<Dices size={17} />} onClick={simAll}>
+              <Button
+                variant="primary"
+                icon={<Dices size={17} />}
+                className="whitespace-nowrap"
+                onClick={simAll}
+              >
                 Aleatorizar tudo
               </Button>
             )}
@@ -230,7 +245,7 @@ export function TournamentScreen() {
               <Button
                 variant="primary"
                 icon={<Check size={16} />}
-                className="animate-pulse-glow"
+                className="animate-pulse-glow whitespace-nowrap"
                 onClick={handleConclude}
               >
                 {isSeasonTournament ? 'Concluir e avançar' : 'Concluir campeonato'}
@@ -300,31 +315,13 @@ export function TournamentScreen() {
         )}
       </div>
 
-      {/* Banner de campeão — a glória é dourada */}
-      {finished && champ && (
-        <div className="animate-fade-up relative isolate overflow-hidden border-b border-gold-600/25 px-6 py-4">
-          {/* Fundo "Silk" animado (mesmo efeito da Home), tonalizado em dourado */}
-          <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-            <div className="absolute inset-0 opacity-30">
-              <Silk color="#96691d" speed={1.8} scale={1.5} noiseIntensity={1} rotation={0} />
-            </div>
-            <div className="absolute inset-0 bg-gradient-to-r from-gold-950/75 via-gold-950/35 to-ink-950/60" />
-          </div>
-          <div className="flex items-center gap-4">
-            <Trophy size={28} className="text-gold-400 drop-shadow-[0_0_10px_rgba(224,175,80,0.4)]" />
-            <TeamBadge team={champ} size="lg" />
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-gold-400">Campeão</p>
-              <p className="display bg-gold-grad bg-clip-text text-4xl text-transparent drop-shadow-[0_0_18px_rgba(224,175,80,0.3)]">
-                {champ.name}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Banner de campeão — a glória é dourada. No desktop fica fixo aqui; no
+          mobile ele desce pro topo do conteúdo (md:hidden lá embaixo) e rola junto. */}
+      {finished && champ && <ChampionBanner champ={champ} className="hidden md:block" />}
 
       {/* Conteúdo */}
       <div className="flex-1 overflow-y-auto px-4 py-5 md:px-6 md:py-6">
+        {finished && champ && <ChampionBanner champ={champ} compact className="mb-5 md:hidden" />}
         {mcActive && (
           <div className="mb-5 inline-flex rounded-xl border border-white/5 bg-ink-900 p-1">
             {(['play', 'mc'] as const).map((v) => (
@@ -760,29 +757,83 @@ function RoundsList({
   )
 }
 
+// Split responsivo: no desktop (min-[960px]) mostra as duas colunas lado a lado
+// como sempre; no mobile vira uma aba por toque (só um painel por vez, sem rolagem
+// gigante). Rende ambos os painéis e controla visibilidade por CSS — o desktop
+// fica idêntico ao de antes.
+function SplitTabs({
+  gridClass,
+  left,
+  right
+}: {
+  gridClass: string
+  left: { label: string; node: ReactNode }
+  right: { label: string; node: ReactNode }
+}) {
+  const [active, setActive] = useState<'left' | 'right'>('left')
+  const panels = [
+    { key: 'left' as const, ...left },
+    { key: 'right' as const, ...right }
+  ]
+  return (
+    <div>
+      <div className="mb-4 flex rounded-xl border border-white/5 bg-ink-900 p-1 min-[960px]:hidden">
+        {panels.map((p) => (
+          <button
+            key={p.key}
+            onClick={() => setActive(p.key)}
+            className={cx(
+              'flex-1 rounded-lg px-3 py-1.5 text-sm font-semibold transition',
+              active === p.key ? 'bg-blood-grad text-white shadow-glow-sm' : 'text-zinc-400 hover:text-zinc-100'
+            )}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+      <div className={cx('grid items-start gap-5', gridClass)}>
+        {panels.map((p) => (
+          <div key={p.key} className={cx(active !== p.key && 'hidden', 'min-[960px]:block')}>
+            {p.node}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function LeagueView({ t, teams, currentIds, onSim, onOpen }: ViewProps) {
   const rows = useMemo(() => leagueStandings(t), [t])
   return (
-    <div className="grid items-start gap-5 min-[960px]:grid-cols-[1fr_minmax(340px,430px)]">
-      <div className="space-y-5">
-        <div className="card p-4">
-          <p className="mb-2 text-sm font-bold text-white">Classificação</p>
-          <StandingsTable rows={rows} teams={teams} sport={t.sport} form={formMapOf(t)} seedLabels={t.seedLabels} />
-        </div>
-      </div>
-      <div>
-        <p className="mb-3 text-sm font-bold text-white">Partidas</p>
-        <RoundsList
-          t={t}
-          matches={t.matches}
-          teams={teams}
-          currentIds={currentIds}
-          onSim={onSim}
-          onOpen={onOpen}
-          allowReRoll={t.phase !== 'finished'}
-        />
-      </div>
-    </div>
+    <SplitTabs
+      gridClass="min-[960px]:grid-cols-[1fr_minmax(340px,430px)]"
+      left={{
+        label: 'Classificação',
+        node: (
+          <div className="card p-4">
+            <p className="mb-2 hidden text-sm font-bold text-white min-[960px]:block">Classificação</p>
+            <StandingsTable rows={rows} teams={teams} sport={t.sport} form={formMapOf(t)} seedLabels={t.seedLabels} />
+          </div>
+        )
+      }}
+      right={{
+        label: 'Partidas',
+        node: (
+          <div>
+            <p className="mb-3 hidden text-sm font-bold text-white min-[960px]:block">Partidas</p>
+            <RoundsList
+              t={t}
+              matches={t.matches}
+              teams={teams}
+              currentIds={currentIds}
+              onSim={onSim}
+              onOpen={onOpen}
+              allowReRoll={t.phase !== 'finished'}
+            />
+          </div>
+        )
+      }}
+    />
   )
 }
 
@@ -793,24 +844,35 @@ function SwissView({ t, teams, currentIds, onSim, onOpen }: ViewProps) {
     [t]
   )
   return (
-    <div className="grid items-start gap-5 min-[960px]:grid-cols-[1fr_minmax(340px,430px)]">
-      <div className="card p-4">
-        <p className="mb-2 text-sm font-bold text-white">Classificação · Suíço</p>
-        <StandingsTable rows={rows} teams={teams} sport={t.sport} form={formMapOf(t)} />
-      </div>
-      <div>
-        <p className="mb-3 text-sm font-bold text-white">Rodadas</p>
-        <RoundsList
-          t={t}
-          matches={t.matches}
-          teams={teams}
-          currentIds={currentIds}
-          onSim={onSim}
-          onOpen={onOpen}
-          allowReRoll={false}
-        />
-      </div>
-    </div>
+    <SplitTabs
+      gridClass="min-[960px]:grid-cols-[1fr_minmax(340px,430px)]"
+      left={{
+        label: 'Classificação',
+        node: (
+          <div className="card p-4">
+            <p className="mb-2 hidden text-sm font-bold text-white min-[960px]:block">Classificação · Suíço</p>
+            <StandingsTable rows={rows} teams={teams} sport={t.sport} form={formMapOf(t)} />
+          </div>
+        )
+      }}
+      right={{
+        label: 'Rodadas',
+        node: (
+          <div>
+            <p className="mb-3 hidden text-sm font-bold text-white min-[960px]:block">Rodadas</p>
+            <RoundsList
+              t={t}
+              matches={t.matches}
+              teams={teams}
+              currentIds={currentIds}
+              onSim={onSim}
+              onOpen={onOpen}
+              allowReRoll={false}
+            />
+          </div>
+        )
+      }}
+    />
   )
 }
 
@@ -916,38 +978,49 @@ function GroupsView({ t, teams, currentIds, onSim, onOpen }: ViewProps) {
       {(!hasBracket || tab === 'groups') && (
         // visão "dia de jogo": partidas da rodada ao lado das tabelas — simula
         // e vê o resultado + classificação mudando sem rolar a página
-        <div className="grid items-start gap-5 min-[960px]:grid-cols-[1fr_minmax(360px,430px)]">
-          <div className="grid gap-4 lg:grid-cols-2">
-            {(t.groups ?? []).map((g) => (
-              <div key={g.id} className="card p-4">
-                <p className="mb-2 flex items-center gap-2 text-sm font-bold text-white">
-                  <span className="h-1.5 w-1.5 bg-blood-600" /> {g.name}
-                </p>
-                <StandingsTable
-                  rows={standings[g.id] ?? []}
+        <SplitTabs
+          gridClass="min-[960px]:grid-cols-[1fr_minmax(360px,430px)]"
+          left={{
+            label: 'Grupos',
+            node: (
+              <div className="grid gap-4 lg:grid-cols-2">
+                {(t.groups ?? []).map((g) => (
+                  <div key={g.id} className="card p-4">
+                    <p className="mb-2 flex items-center gap-2 text-sm font-bold text-white">
+                      <span className="h-1.5 w-1.5 bg-blood-600" /> {g.name}
+                    </p>
+                    <StandingsTable
+                      rows={standings[g.id] ?? []}
+                      teams={teams}
+                      sport={t.sport}
+                      qualifyCount={t.config.qualifiersPerGroup}
+                      compact
+                      form={formMapOf(t)}
+                      seedLabels={t.seedLabels}
+                    />
+                  </div>
+                ))}
+              </div>
+            )
+          }}
+          right={{
+            label: 'Partidas',
+            node: (
+              <div>
+                <p className="mb-3 hidden text-sm font-bold text-white min-[960px]:block">Partidas</p>
+                <RoundsList
+                  t={t}
+                  matches={groupMatches}
                   teams={teams}
-                  sport={t.sport}
-                  qualifyCount={t.config.qualifiersPerGroup}
-                  compact
-                  form={formMapOf(t)}
-                  seedLabels={t.seedLabels}
+                  currentIds={currentIds}
+                  onSim={onSim}
+                  onOpen={onOpen}
+                  allowReRoll={t.phase === 'group'}
                 />
               </div>
-            ))}
-          </div>
-          <div>
-            <p className="mb-3 text-sm font-bold text-white">Partidas</p>
-            <RoundsList
-              t={t}
-              matches={groupMatches}
-              teams={teams}
-              currentIds={currentIds}
-              onSim={onSim}
-              onOpen={onOpen}
-              allowReRoll={t.phase === 'group'}
-            />
-          </div>
-        </div>
+            )
+          }}
+        />
       )}
 
       {hasBracket && tab === 'bracket' && (
@@ -957,27 +1030,163 @@ function GroupsView({ t, teams, currentIds, onSim, onOpen }: ViewProps) {
   )
 }
 
-// Artilharia / abates ao vivo — visível em todos os formatos, atualiza a cada rodada
-function LiveScorers({ t, teams }: { t: Tournament; teams: Record<string, import('../types').Team> }) {
-  const scorers = useMemo(() => tournamentScorers(t, 6), [t])
-  if (scorers.length === 0) return null
-  const unit = t.sport === 'football' ? 'gols' : 'abates'
-  const Icon = t.sport === 'football' ? Goal : Crosshair
+// Banner de campeão — dourado, com fundo Silk. `compact` encolhe pro mobile.
+function ChampionBanner({
+  champ,
+  compact,
+  className
+}: {
+  champ: import('../types').Team
+  compact?: boolean
+  className?: string
+}) {
   return (
-    <div className="card mb-5 flex items-center gap-4 overflow-x-auto px-4 py-3">
-      <span className="kicker shrink-0">
-        <Icon size={14} className="text-blood-400" />
-        {t.sport === 'football' ? 'Artilharia' : 'Abates'}
-      </span>
-      {scorers.map((s, i) => (
-        <div key={s.playerId} className="flex shrink-0 items-center gap-2">
-          <span className="tnum text-xs font-bold text-zinc-600">{i + 1}</span>
-          <TeamBadge team={teams[s.teamId]} size="sm" />
-          <span className="whitespace-nowrap text-sm text-zinc-200">{s.name}</span>
-          <span className="tnum text-sm font-bold text-white">{s.value}</span>
+    <div
+      className={cx(
+        'animate-fade-up relative isolate overflow-hidden border-gold-600/25',
+        compact ? 'rounded-xl border px-4 py-3' : 'border-b px-6 py-4',
+        className
+      )}
+    >
+      {/* Fundo "Silk" animado (mesmo efeito da Home), tonalizado em dourado */}
+      <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+        <div className="absolute inset-0 opacity-30">
+          <Silk color="#96691d" speed={1.8} scale={1.5} noiseIntensity={1} rotation={0} />
         </div>
-      ))}
-      <span className="shrink-0 text-[11px] text-zinc-600">{unit}</span>
+        <div className="absolute inset-0 bg-gradient-to-r from-gold-950/75 via-gold-950/35 to-ink-950/60" />
+      </div>
+      <div className={cx('flex items-center', compact ? 'gap-3' : 'gap-4')}>
+        <Trophy
+          size={compact ? 22 : 28}
+          className="shrink-0 text-gold-400 drop-shadow-[0_0_10px_rgba(224,175,80,0.4)]"
+        />
+        <TeamBadge team={champ} size={compact ? 'md' : 'lg'} />
+        <div className="min-w-0">
+          <p
+            className={cx(
+              'font-semibold uppercase tracking-[0.3em] text-gold-400',
+              compact ? 'text-[10px]' : 'text-[11px]'
+            )}
+          >
+            Campeão
+          </p>
+          <p
+            className={cx(
+              'display truncate bg-gold-grad bg-clip-text text-transparent drop-shadow-[0_0_18px_rgba(224,175,80,0.3)]',
+              compact ? 'text-2xl' : 'text-4xl'
+            )}
+          >
+            {champ.name}
+          </p>
+        </div>
+      </div>
     </div>
+  )
+}
+
+// Artilharia / abates ao vivo — visível em todos os formatos, atualiza a cada rodada.
+// Clicável: abre uma tabela completa de todos os artilheiros/goleadores do torneio.
+function LiveScorers({ t, teams }: { t: Tournament; teams: Record<string, import('../types').Team> }) {
+  const [open, setOpen] = useState(false)
+  const top = useMemo(() => tournamentScorers(t, 6), [t])
+  const all = useMemo(() => tournamentScorers(t, Infinity), [t])
+  if (top.length === 0) return null
+  const football = t.sport === 'football'
+  const unit = football ? 'gols' : 'abates'
+  const Icon = football ? Goal : Crosshair
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        title={football ? 'Ver tabela completa de artilheiros' : 'Ver tabela completa de abates'}
+        className="card mb-5 flex w-full items-center gap-4 overflow-x-auto px-4 py-3 text-left transition hover:border-blood-500/40 hover:bg-white/[0.02]"
+      >
+        <span className="kicker shrink-0">
+          <Icon size={14} className="text-blood-400" />
+          {football ? 'Artilharia' : 'Abates'}
+        </span>
+        {top.map((s, i) => (
+          <div key={s.playerId} className="flex shrink-0 items-center gap-2">
+            <span className="tnum text-xs font-bold text-zinc-600">{i + 1}</span>
+            <TeamBadge team={teams[s.teamId]} size="sm" />
+            <span className="whitespace-nowrap text-sm text-zinc-200">{s.name}</span>
+            <span className="tnum text-sm font-bold text-white">
+              {s.value}
+              {football && s.assists > 0 && (
+                <span className="ml-1 text-xs font-semibold text-zinc-500">· {s.assists}A</span>
+              )}
+            </span>
+          </div>
+        ))}
+        <span className="shrink-0 text-[11px] text-zinc-600">{unit}</span>
+        <span className="ml-auto flex shrink-0 items-center gap-1 whitespace-nowrap text-[11px] font-semibold text-blood-400">
+          Ver tabela
+          <ChevronRight size={13} />
+        </span>
+      </button>
+      <ScorersModal open={open} onClose={() => setOpen(false)} t={t} teams={teams} scorers={all} />
+    </>
+  )
+}
+
+// Tabela completa de artilheiros/goleadores do torneio (futebol mostra gols + assistências).
+function ScorersModal({
+  open,
+  onClose,
+  t,
+  teams,
+  scorers
+}: {
+  open: boolean
+  onClose: () => void
+  t: Tournament
+  teams: Record<string, import('../types').Team>
+  scorers: ReturnType<typeof tournamentScorers>
+}) {
+  const football = t.sport === 'football'
+  const Icon = football ? Goal : Crosshair
+  // "Artilharia" = quem pontuou (gols no futebol / abates no e-sports); assistências vão junto na linha.
+  const rows = scorers.filter((s) => s.value > 0)
+  return (
+    <Modal open={open} onClose={onClose} maxWidth="max-w-xl">
+      <div className="flex items-center gap-2 border-b border-white/5 px-5 py-4">
+        <Icon size={18} className="text-blood-400" />
+        <h2 className="heading text-lg text-white">{football ? 'Artilharia' : 'Abates'}</h2>
+        <span className="text-sm text-zinc-600">· {t.name}</span>
+      </div>
+      <div className="max-h-[65vh] overflow-y-auto px-2 py-2">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-[11px] uppercase tracking-wide text-zinc-600">
+              <th className="w-8 px-2 py-2 text-right font-semibold">#</th>
+              <th className="px-2 py-2 text-left font-semibold">Jogador</th>
+              <th className="w-14 px-2 py-2 text-right font-semibold">{football ? 'Gols' : 'Abates'}</th>
+              {football && <th className="w-14 px-2 py-2 text-right font-semibold">Assist.</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((s, i) => (
+              <tr key={s.playerId} className="border-t border-white/5">
+                <td className="tnum px-2 py-2 text-right text-xs font-bold text-zinc-600">{i + 1}</td>
+                <td className="px-2 py-2">
+                  <div className="flex items-center gap-2">
+                    <TeamBadge team={teams[s.teamId]} size="sm" />
+                    <div className="min-w-0">
+                      <div className="truncate text-zinc-100">{s.name}</div>
+                      <div className="truncate text-xs text-zinc-600">{teams[s.teamId]?.name ?? '—'}</div>
+                    </div>
+                  </div>
+                </td>
+                <td className="tnum px-2 py-2 text-right font-bold text-white">{s.value}</td>
+                {football && (
+                  <td className="tnum px-2 py-2 text-right font-semibold text-zinc-400">{s.assists}</td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Modal>
   )
 }

@@ -42,19 +42,40 @@ const POS_WEIGHT: Record<Player['position'], number> = {
   GK: 0.05
 }
 
+/** peso de protagonismo do jogador: posição × influência editada pelo usuário (padrão 1.0) */
+function weightOf(p: Player): number {
+  return POS_WEIGHT[p.position] * (p.influence ?? 1)
+}
+
 function pickScorer(team: Team): Player {
   const squad = team.squad ?? []
   if (squad.length === 0) {
     return { id: `${team.id}_anon`, name: 'Desconhecido', position: 'FWD' }
   }
-  const total = squad.reduce((s, p) => s + POS_WEIGHT[p.position], 0)
+  const total = squad.reduce((s, p) => s + weightOf(p), 0)
   let roll = Math.random() * total
   for (const p of squad) {
-    roll -= POS_WEIGHT[p.position]
+    roll -= weightOf(p)
     if (roll <= 0) return p
   }
   return squad[squad.length - 1]
 }
+
+/** companheiro que dá a assistência (exclui o artilheiro) — mesma ponderação de posição/influência */
+function pickAssist(team: Team, scorerId: string): Player | undefined {
+  const squad = (team.squad ?? []).filter((p) => p.id !== scorerId)
+  if (squad.length === 0) return undefined
+  const total = squad.reduce((s, p) => s + weightOf(p), 0)
+  let roll = Math.random() * total
+  for (const p of squad) {
+    roll -= weightOf(p)
+    if (roll <= 0) return p
+  }
+  return squad[squad.length - 1]
+}
+
+/** ~75% dos gols de jogo (sem contar gol contra) têm assistência — próximo da proporção real do futebol */
+const ASSIST_CHANCE = 0.75
 
 function buildGoals(count: number, team: Team, opponent: Team, minMin: number, maxMin: number): Goal[] {
   const goals: Goal[] = []
@@ -72,7 +93,14 @@ function buildGoals(count: number, team: Team, opponent: Team, minMin: number, m
       })
     } else {
       const scorer = pickScorer(team)
-      goals.push({ minute, teamId: team.id, playerId: scorer.id, playerName: scorer.name })
+      const assist = Math.random() < ASSIST_CHANCE ? pickAssist(team, scorer.id) : undefined
+      goals.push({
+        minute,
+        teamId: team.id,
+        playerId: scorer.id,
+        playerName: scorer.name,
+        ...(assist ? { assistPlayerId: assist.id, assistPlayerName: assist.name } : {})
+      })
     }
   }
   return goals.sort((a, b) => a.minute - b.minute)

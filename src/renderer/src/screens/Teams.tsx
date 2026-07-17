@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
 import { Palette, Pencil, Plus, RotateCcw, Search, Trash2, Users } from 'lucide-react'
-import type { EsportsGame, Sport, Team } from '../types'
+import type { EsportsGame, Position, Sport, Team } from '../types'
 import { useApp } from '../store/app'
 import { PRESET_TEAMS } from '../data/teams'
 import { sectorsOf } from '../engine/strength'
-import { effectiveEsportsRoster } from '../engine/names'
+import { effectiveEsportsRoster, generateSquad, type FootballPlayerOverride } from '../engine/names'
 import { rosterKey } from '../data/esports-rosters'
 import { ESPORTS_GAMES, GAME_META, SPORT_META } from '../lib/meta'
 import { Button, EmptyState, Modal, Segmented, Slider, StrengthBar } from '../components/ui'
@@ -21,6 +21,7 @@ export function TeamsScreen() {
   const customTeams = useApp((s) => s.customTeams)
   const teamOverrides = useApp((s) => s.teamOverrides)
   const rosterOverrides = useApp((s) => s.rosterOverrides)
+  const footballRosterOverrides = useApp((s) => s.footballRosterOverrides)
   const addCustomTeam = useApp((s) => s.addCustomTeam)
   const updateCustomTeam = useApp((s) => s.updateCustomTeam)
   const removeCustomTeam = useApp((s) => s.removeCustomTeam)
@@ -92,8 +93,9 @@ export function TeamsScreen() {
                   {grouped[cat].map((team) => {
                     const edited = !!teamOverrides[team.id]
                     const rosterEdited =
-                      team.sport === 'esports' &&
-                      ESPORTS_GAMES.some((g) => rosterOverrides[rosterKey(g, team.id)])
+                      (team.sport === 'esports' &&
+                        ESPORTS_GAMES.some((g) => rosterOverrides[rosterKey(g, team.id)])) ||
+                      (team.sport === 'football' && !!footballRosterOverrides[team.id])
                     const isCustom = team.category === 'custom'
                     return (
                       <div key={team.id} className="card group flex items-center gap-3 p-3">
@@ -213,6 +215,9 @@ function TeamModal({
   const rosterOverrides = useApp((s) => s.rosterOverrides)
   const setRosterOverride = useApp((s) => s.setRosterOverride)
   const resetRosterOverride = useApp((s) => s.resetRosterOverride)
+  const footballRosterOverrides = useApp((s) => s.footballRosterOverrides)
+  const setFootballRosterOverride = useApp((s) => s.setFootballRosterOverride)
+  const resetFootballRosterOverride = useApp((s) => s.resetFootballRosterOverride)
 
   const [name, setName] = useState('')
   const [strength, setStrength] = useState(70)
@@ -223,10 +228,12 @@ function TeamModal({
   const [defense, setDefense] = useState(70)
   const [rosterGame, setRosterGame] = useState<EsportsGame>('cs2')
   const [rostersByGame, setRostersByGame] = useState<Record<EsportsGame, string[]>>({ cs2: [], valorant: [] })
+  const [footballRoster, setFootballRoster] = useState<FootballPlayerOverride[]>([])
   const isPreset = !!editing && editing.category !== 'custom'
   const showSectors = sport === 'football'
   // só dá pra editar elenco de um time que já existe (precisa de id)
   const showRoster = !!editing && sport === 'esports'
+  const showFootballRoster = !!editing && sport === 'football'
 
   // sincroniza ao abrir
   const [lastOpen, setLastOpen] = useState(false)
@@ -249,6 +256,15 @@ function TeamModal({
               valorant: effectiveEsportsRoster(editing, 'valorant', rosterOverrides)
             }
           : { cs2: [], valorant: [] }
+      )
+      setFootballRoster(
+        editing && editing.sport === 'football'
+          ? generateSquad(editing, undefined, undefined, footballRosterOverrides).map((p) => ({
+              name: p.name,
+              position: p.position,
+              influence: p.influence ?? 1
+            }))
+          : []
       )
     }
   }
@@ -276,8 +292,36 @@ function TeamModal({
     setRostersByGame((prev) => ({ ...prev, [rosterGame]: effectiveEsportsRoster(editing, rosterGame, {}) }))
   }
 
+  // persiste o elenco de futebol editado: se igual ao padrão (nome, posição e
+  // influência neutra), remove o override em vez de guardar um "não-edit"
+  const persistFootballRoster = (): void => {
+    if (!showFootballRoster || !editing) return
+    const def = generateSquad(editing, undefined, undefined, {})
+    const cur = footballRoster.map((p, i) => ({
+      name: p.name.trim() || def[i]?.name || `Jogador ${i + 1}`,
+      position: p.position,
+      influence: p.influence
+    }))
+    const isDefault =
+      cur.length === def.length &&
+      cur.every((p, i) => p.name === def[i].name && p.position === def[i].position && p.influence === 1)
+    if (isDefault) resetFootballRosterOverride(editing.id)
+    else setFootballRosterOverride(editing.id, cur)
+  }
+
+  const editFootballPlayer = (i: number, patch: Partial<FootballPlayerOverride>): void =>
+    setFootballRoster((prev) => prev.map((p, idx) => (idx === i ? { ...p, ...patch } : p)))
+
+  const restoreFootballRoster = (): void => {
+    if (!editing) return
+    setFootballRoster(
+      generateSquad(editing, undefined, undefined, {}).map((p) => ({ name: p.name, position: p.position, influence: 1 }))
+    )
+  }
+
   const handleSave = (): void => {
     persistRosters()
+    persistFootballRoster()
     onSave(showSectors ? { name, strength, color, sport, attack, midfield, defense } : { name, strength, color, sport })
   }
 
@@ -368,6 +412,57 @@ function TeamModal({
               className="flex items-center gap-1.5 text-xs text-zinc-500 underline hover:text-zinc-200"
             >
               <RotateCcw size={12} /> Restaurar elenco padrão ({GAME_META[rosterGame].short})
+            </button>
+          </div>
+        )}
+
+        {showFootballRoster && (
+          <div className="mb-6 space-y-3 rounded-xl border border-white/5 bg-ink-850/50 p-3">
+            <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+              <Users size={12} /> Elenco · nome, posição e influência (protagonismo em gols/assistências)
+            </p>
+            <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+              {footballRoster.map((p, i) => (
+                <div key={i} className="rounded-lg bg-ink-900/40 p-2">
+                  <div className="mb-1.5 flex items-center gap-2">
+                    <input
+                      className="input flex-1 py-1.5 text-sm"
+                      placeholder={`Jogador ${i + 1}`}
+                      value={p.name}
+                      onChange={(e) => editFootballPlayer(i, { name: e.target.value })}
+                    />
+                    <select
+                      className="input w-auto shrink-0 py-1.5 text-xs"
+                      value={p.position}
+                      onChange={(e) => editFootballPlayer(i, { position: e.target.value as Position })}
+                    >
+                      <option value="GK">GOL</option>
+                      <option value="DEF">ZAG</option>
+                      <option value="MID">MEI</option>
+                      <option value="FWD">ATA</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-14 shrink-0 text-[11px] text-zinc-500">Influência</span>
+                    <Slider
+                      value={p.influence}
+                      onChange={(v) => editFootballPlayer(i, { influence: v })}
+                      min={0.5}
+                      max={2}
+                      step={0.1}
+                    />
+                    <span className="tnum w-8 shrink-0 text-right text-xs font-bold text-zinc-200">
+                      {p.influence.toFixed(1)}x
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={restoreFootballRoster}
+              className="flex items-center gap-1.5 text-xs text-zinc-500 underline hover:text-zinc-200"
+            >
+              <RotateCcw size={12} /> Restaurar elenco padrão
             </button>
           </div>
         )}

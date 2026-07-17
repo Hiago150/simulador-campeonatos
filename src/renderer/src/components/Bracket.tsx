@@ -76,7 +76,8 @@ function BracketCard({
   let played = false
   let homeScore: number | undefined
   let awayScore: number | undefined
-  let legsLabel: string | undefined
+  let idaTxt: string | undefined
+  let voltaTxt: string | undefined
   let penalties: [number, number] | undefined
   let openMatch: Match | undefined
   let nextToSim: string | undefined
@@ -88,11 +89,9 @@ function BracketCard({
       homeScore = leg1.homeScore + leg2.awayScore
       awayScore = leg1.awayScore + leg2.homeScore
     }
-    const idaTxt = leg1?.played ? `${leg1.homeScore}-${leg1.awayScore}` : '–'
-    const voltaTxt = leg2?.played ? `${leg2.homeScore}-${leg2.awayScore}` : '–'
-    if (leg1?.played || leg2?.played) legsLabel = `Ida ${idaTxt} · Volta ${voltaTxt}`
+    idaTxt = leg1?.played ? `${leg1.homeScore}-${leg1.awayScore}` : '–'
+    voltaTxt = leg2?.played ? `${leg2.homeScore}-${leg2.awayScore}` : '–'
     penalties = leg2?.penalties
-    openMatch = leg2?.played ? leg2 : leg1?.played ? leg1 : (leg1 ?? leg2)
     nextToSim = leg1 && !leg1.played ? leg1.id : leg2 && !leg2.played ? leg2.id : undefined
   } else {
     played = !!single?.played
@@ -128,8 +127,30 @@ function BracketCard({
           <Play size={9} fill="currentColor" /> Simular{twoLeg ? (leg1 && !leg1.played ? ' ida' : ' volta') : ''}
         </button>
       )}
-      {legsLabel && (
-        <div className="bg-ink-900 py-1 text-center text-[10px] font-semibold text-zinc-500">{legsLabel}</div>
+      {twoLeg && (
+        // ida e volta abrem o modal (preview/Assistir) cada uma pro seu próprio
+        // jogo — antes só era possível chegar na volta depois de jogada, porque
+        // o card inteiro tinha um único alvo de clique.
+        <div className="flex divide-x divide-white/5 bg-ink-900 text-center text-[10px] font-semibold text-zinc-500">
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              leg1 && onOpen(leg1)
+            }}
+            className="flex-1 py-1 transition hover:bg-white/5 hover:text-zinc-300"
+          >
+            Ida {idaTxt}
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              leg2 && onOpen(leg2)
+            }}
+            className="flex-1 py-1 transition hover:bg-white/5 hover:text-zinc-300"
+          >
+            Volta {voltaTxt}
+          </button>
+        </div>
       )}
       {played && penalties && (
         <div className="bg-ink-900 py-1 text-center text-[10px] font-semibold text-blood-300">

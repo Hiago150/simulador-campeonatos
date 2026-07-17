@@ -102,7 +102,9 @@ export function footballTimeline(m: Match, teams: Record<string, Team>): Playbac
       side: homeGoal ? 0 : 1,
       highlight: virada ? 'decisive' : undefined,
       score: [h, a],
-      text: `GOL! ${g.playerName}${g.ownGoal ? ' (contra)' : ''} — ${home} ${h}–${a} ${away}${virada ? ' · virada!' : ''}`
+      text: `GOL! ${g.playerName}${g.ownGoal ? ' (contra)' : ''}${
+        !g.ownGoal && g.assistPlayerName ? ` (assist. ${g.assistPlayerName})` : ''
+      } — ${home} ${h}–${a} ${away}${virada ? ' · virada!' : ''}`
     })
   }
 

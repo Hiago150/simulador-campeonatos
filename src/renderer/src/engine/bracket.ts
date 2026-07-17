@@ -135,9 +135,13 @@ export function buildBracket(
 /** vencedor de um confronto (agregado quando ida e volta) já decidido */
 function tieWinner(bm: BracketMatch, find: (id: string) => Match | undefined): string | null {
   if (bm.legIds && bm.legIds.length === 2) {
+    const ida = find(bm.legIds[0])
     const volta = find(bm.legIds[1])
-    // o vencedor do agregado é gravado no jogo de volta (decisivo)
-    return volta?.played ? (volta.winnerId ?? null) : null
+    if (!ida?.played || !volta?.played) return null
+    // o agregado só é decidido pela partida jogada por último (a outra é
+    // amistosa/neutra e não carrega winnerId) — a ida pode vir depois da
+    // volta agora que dá pra assistir/simular a volta fora de ordem.
+    return ida.winnerId ?? volta.winnerId ?? null
   }
   if (bm.matchId) {
     const m = find(bm.matchId)
