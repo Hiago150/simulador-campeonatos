@@ -1150,37 +1150,43 @@ function ScorersModal({
   const rows = scorers.filter((s) => s.value > 0)
   return (
     <Modal open={open} onClose={onClose} maxWidth="max-w-xl">
-      <div className="flex items-center gap-2 border-b border-white/5 px-5 py-4">
-        <Icon size={18} className="text-blood-400" />
-        <h2 className="heading text-lg text-white">{football ? 'Artilharia' : 'Abates'}</h2>
-        <span className="text-sm text-zinc-600">· {t.name}</span>
+      <div className="flex min-w-0 items-center gap-2 border-b border-white/5 px-4 py-4 sm:px-5">
+        <Icon size={18} className="shrink-0 text-blood-400" />
+        <h2 className="heading shrink-0 text-lg text-white">{football ? 'Artilharia' : 'Abates'}</h2>
+        <span className="truncate text-sm text-zinc-600">· {t.name}</span>
       </div>
-      <div className="max-h-[65vh] overflow-y-auto px-2 py-2">
-        <table className="w-full text-sm">
+      <div className="max-h-[65vh] overflow-y-auto px-1.5 py-2 sm:px-2">
+        <table className="w-full table-fixed text-sm">
+          <colgroup>
+            <col className="w-6 sm:w-8" />
+            <col />
+            <col className="w-10 sm:w-14" />
+            {football && <col className="w-10 sm:w-14" />}
+          </colgroup>
           <thead>
-            <tr className="text-[11px] uppercase tracking-wide text-zinc-600">
-              <th className="w-8 px-2 py-2 text-right font-semibold">#</th>
-              <th className="px-2 py-2 text-left font-semibold">Jogador</th>
-              <th className="w-14 px-2 py-2 text-right font-semibold">{football ? 'Gols' : 'Abates'}</th>
-              {football && <th className="w-14 px-2 py-2 text-right font-semibold">Assist.</th>}
+            <tr className="text-[10px] uppercase tracking-wide text-zinc-600 sm:text-[11px]">
+              <th className="px-1.5 py-2 text-right font-semibold sm:px-2">#</th>
+              <th className="px-1.5 py-2 text-left font-semibold sm:px-2">Jogador</th>
+              <th className="px-1.5 py-2 text-right font-semibold sm:px-2">{football ? 'Gols' : 'Abates'}</th>
+              {football && <th className="px-1.5 py-2 text-right font-semibold sm:px-2">Assist.</th>}
             </tr>
           </thead>
           <tbody>
             {rows.map((s, i) => (
               <tr key={s.playerId} className="border-t border-white/5">
-                <td className="tnum px-2 py-2 text-right text-xs font-bold text-zinc-600">{i + 1}</td>
-                <td className="px-2 py-2">
-                  <div className="flex items-center gap-2">
-                    <TeamBadge team={teams[s.teamId]} size="sm" />
+                <td className="tnum px-1.5 py-2 text-right text-xs font-bold text-zinc-600 sm:px-2">{i + 1}</td>
+                <td className="min-w-0 px-1.5 py-2 sm:px-2">
+                  <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
+                    <TeamBadge team={teams[s.teamId]} size="sm" className="shrink-0" />
                     <div className="min-w-0">
                       <div className="truncate text-zinc-100">{s.name}</div>
                       <div className="truncate text-xs text-zinc-600">{teams[s.teamId]?.name ?? '—'}</div>
                     </div>
                   </div>
                 </td>
-                <td className="tnum px-2 py-2 text-right font-bold text-white">{s.value}</td>
+                <td className="tnum px-1.5 py-2 text-right font-bold text-white sm:px-2">{s.value}</td>
                 {football && (
-                  <td className="tnum px-2 py-2 text-right font-semibold text-zinc-400">{s.assists}</td>
+                  <td className="tnum px-1.5 py-2 text-right font-semibold text-zinc-400 sm:px-2">{s.assists}</td>
                 )}
               </tr>
             ))}
