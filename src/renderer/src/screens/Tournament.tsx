@@ -1146,14 +1146,39 @@ function ScorersModal({
 }) {
   const football = t.sport === 'football'
   const Icon = football ? Goal : Crosshair
-  // "Artilharia" = quem pontuou (gols no futebol / abates no e-sports); assistências vão junto na linha.
-  const rows = scorers.filter((s) => s.value > 0)
+  const [view, setView] = useState<'goals' | 'assists'>('goals')
+  const byAssists = view === 'assists' && football
+  // "Artilharia" = quem pontuou (gols no futebol / abates no e-sports); "Assistências" reordena
+  // pelo mesmo dado, só que priorizando quem deu passe pro gol em vez de quem marcou.
+  const rows = byAssists
+    ? scorers.filter((s) => s.assists > 0).sort((a, b) => b.assists - a.assists)
+    : scorers.filter((s) => s.value > 0)
   return (
     <Modal open={open} onClose={onClose} maxWidth="max-w-xl">
-      <div className="flex min-w-0 items-center gap-2 border-b border-white/5 px-4 py-4 sm:px-5">
-        <Icon size={18} className="shrink-0 text-blood-400" />
-        <h2 className="heading shrink-0 text-lg text-white">{football ? 'Artilharia' : 'Abates'}</h2>
-        <span className="truncate text-sm text-zinc-600">· {t.name}</span>
+      <div className="border-b border-white/5 px-4 py-4 sm:px-5">
+        <div className="flex min-w-0 items-center gap-2">
+          <Icon size={18} className="shrink-0 text-blood-400" />
+          <h2 className="heading shrink-0 text-lg text-white">
+            {byAssists ? 'Assistências' : football ? 'Artilharia' : 'Abates'}
+          </h2>
+          <span className="truncate text-sm text-zinc-600">· {t.name}</span>
+        </div>
+        {football && (
+          <div className="mt-3 inline-flex rounded-xl border border-white/5 bg-ink-900 p-1">
+            {(['goals', 'assists'] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={cx(
+                  'rounded-lg px-3 py-1 text-xs font-semibold transition',
+                  view === v ? 'bg-blood-grad text-white shadow-glow-sm' : 'text-zinc-400 hover:text-zinc-100'
+                )}
+              >
+                {v === 'goals' ? 'Artilheiros' : 'Assistências'}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       <div className="max-h-[65vh] overflow-y-auto px-1.5 py-2 sm:px-2">
         <table className="w-full table-fixed text-sm">
@@ -1184,9 +1209,13 @@ function ScorersModal({
                     </div>
                   </div>
                 </td>
-                <td className="tnum px-1.5 py-2 text-right font-bold text-white sm:px-2">{s.value}</td>
+                <td className={cx('tnum px-1.5 py-2 text-right sm:px-2', byAssists ? 'font-semibold text-zinc-400' : 'font-bold text-white')}>
+                  {s.value}
+                </td>
                 {football && (
-                  <td className="tnum px-1.5 py-2 text-right font-semibold text-zinc-400 sm:px-2">{s.assists}</td>
+                  <td className={cx('tnum px-1.5 py-2 text-right sm:px-2', byAssists ? 'font-bold text-white' : 'font-semibold text-zinc-400')}>
+                    {s.assists}
+                  </td>
                 )}
               </tr>
             ))}

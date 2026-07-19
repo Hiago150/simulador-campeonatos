@@ -7,22 +7,40 @@ import {
 } from 'framer-motion'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { cx } from '../lib/cx'
+import cursorArrow1 from '../assets/cursor/marble-arrow-1.png'
+import cursorArrow2 from '../assets/cursor/marble-arrow-2.png'
+import cursorHand from '../assets/cursor/marble-hand.png'
 
 // Curva de easing "expo-out" — base de quase todas as transições
 export const EASE = [0.22, 1, 0.36, 1] as const
 
 // ------------------------------------------------------------------
-//  Cursor customizado (invertendo o fundo via mix-blend-difference)
+//  Cursor customizado — textura de mármore preto (pack "Sweezy Cursors")
+//  Seta com brilho pulsando entre 2 frames (recriando o .ani original);
+//  troca pra mão apontando em cima de link/botão/[data-cursor="hover"].
+//  Hotspot (ponta da seta / ponta do dedo) alinhado ao ponteiro real via
+//  offset calculado a partir da posição do hotspot no arquivo de origem.
 // ------------------------------------------------------------------
+
+const ARROW_SIZE = 34
+const HAND_SIZE = 38
+// hotspot do pack original, em px de uma imagem-fonte de 128×128
+const ARROW_HOTSPOT = { x: 2, y: 2 }
+const HAND_HOTSPOT = { x: 30, y: 2 }
+const arrowOffset = {
+  x: (ARROW_HOTSPOT.x / 128) * ARROW_SIZE,
+  y: (ARROW_HOTSPOT.y / 128) * ARROW_SIZE
+}
+const handOffset = {
+  x: (HAND_HOTSPOT.x / 128) * HAND_SIZE,
+  y: (HAND_HOTSPOT.y / 128) * HAND_SIZE
+}
 
 export function CustomCursor() {
   const x = useMotionValue(-100)
   const y = useMotionValue(-100)
-  // ponto preciso (segue de perto) + anel sutil que vem atrás
-  const dotX = useSpring(x, { stiffness: 1300, damping: 50, mass: 0.2 })
-  const dotY = useSpring(y, { stiffness: 1300, damping: 50, mass: 0.2 })
-  const ringX = useSpring(x, { stiffness: 220, damping: 26, mass: 0.5 })
-  const ringY = useSpring(y, { stiffness: 220, damping: 26, mass: 0.5 })
+  const cx_ = useSpring(x, { stiffness: 800, damping: 40, mass: 0.4 })
+  const cy_ = useSpring(y, { stiffness: 800, damping: 40, mass: 0.4 })
   const [hover, setHover] = useState(false)
 
   useEffect(() => {
@@ -43,28 +61,37 @@ export function CustomCursor() {
   }, [x, y])
 
   return (
-    <>
+    <motion.div
+      className="pointer-events-none fixed left-0 top-0 z-[120] hidden md:block"
+      style={{ x: cx_, y: cy_ }}
+    >
+      {/* Seta — brilho pulsando entre os 2 frames do .ani original */}
       <motion.div
-        className="pointer-events-none fixed left-0 top-0 z-[120] hidden md:block"
-        style={{ x: dotX, y: dotY }}
+        className="absolute"
+        style={{ left: -arrowOffset.x, top: -arrowOffset.y, width: ARROW_SIZE, height: ARROW_SIZE }}
+        animate={{ opacity: hover ? 0 : 1 }}
+        transition={{ duration: 0.15 }}
       >
-        <div className="h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-zinc-100" />
-      </motion.div>
-      <motion.div
-        className="pointer-events-none fixed left-0 top-0 z-[120] hidden md:block"
-        style={{ x: ringX, y: ringY }}
-      >
-        <motion.div
-          className="-translate-x-1/2 -translate-y-1/2 rounded-full border"
-          animate={{
-            width: hover ? 36 : 22,
-            height: hover ? 36 : 22,
-            borderColor: hover ? 'rgba(224,27,27,0.75)' : 'rgba(236,232,223,0.30)'
-          }}
-          transition={{ type: 'spring', stiffness: 300, damping: 24 }}
+        <img src={cursorArrow1} alt="" className="h-full w-full select-none" draggable={false} />
+        <motion.img
+          src={cursorArrow2}
+          alt=""
+          draggable={false}
+          className="absolute inset-0 h-full w-full select-none"
+          animate={{ opacity: [0, 1, 0] }}
+          transition={{ duration: 1.8, times: [0, 0.5, 1], repeat: Infinity, ease: 'easeInOut' }}
         />
       </motion.div>
-    </>
+      {/* Mão apontando — sobre link/botão/[data-cursor="hover"] */}
+      <motion.div
+        className="absolute"
+        style={{ left: -handOffset.x, top: -handOffset.y, width: HAND_SIZE, height: HAND_SIZE }}
+        animate={{ opacity: hover ? 1 : 0, scale: hover ? 1 : 0.85 }}
+        transition={{ duration: 0.15 }}
+      >
+        <img src={cursorHand} alt="" className="h-full w-full select-none" draggable={false} />
+      </motion.div>
+    </motion.div>
   )
 }
 

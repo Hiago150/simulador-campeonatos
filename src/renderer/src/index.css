@@ -124,3 +124,14 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* Cursor customizado (CustomCursor, motionx.tsx): o `cursor-none` do container
+   raiz não é herdado por elementos com cursor próprio (botões/links/inputs
+   com `cursor-pointer`), então a mãozinha nativa do navegador voltava a
+   aparecer sobre eles. Força `none` em tudo — a partir do mesmo breakpoint
+   `md` em que o cursor customizado é exibido. */
+@media (min-width: 768px) {
+  * {
+    cursor: none !important;
+  }
+}

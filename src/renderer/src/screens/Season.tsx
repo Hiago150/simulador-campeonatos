@@ -11,6 +11,7 @@ import {
   FastForward,
   Flag,
   Flame,
+  Info,
   Layers,
   Loader2,
   Medal,
@@ -46,7 +47,8 @@ import { presetsForSport } from '../data/teams'
 import { collectionsForSport, collectionsGrouped } from '../data/collections'
 import { seasonPresetsGrouped, type SeasonPreset } from '../data/season-presets'
 import { FORMAT_META, GAME_META, SPORT_META, FORMATS, ESPORTS_GAMES } from '../lib/meta'
-import { Button, Segmented, Stepper, Toggle } from '../components/ui'
+import { Button, Modal, Segmented, Stepper, Toggle } from '../components/ui'
+import { seasonFlow, seasonHasFlow, type SlotFlow } from '../lib/season-explainer'
 import { createTournament, simulateAll } from '../engine/tournament'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { TeamBadge } from '../components/TeamBadge'
@@ -1607,6 +1609,7 @@ function SeasonHub({
   const [statsTab, setStatsTab] = useState<'year' | 'alltime'>('year')
   const [confirmLeave, setConfirmLeave] = useState(false)
   const [bulkSimulating, setBulkSimulating] = useState(false)
+  const [showFlow, setShowFlow] = useState(false)
 
   if (!activeSeason) return null
 
@@ -1735,6 +1738,12 @@ function SeasonHub({
               Temporada em andamento
             </p>
             <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowFlow(true)}
+                className="flex items-center gap-1.5 text-xs font-semibold text-zinc-400 hover:text-zinc-100 transition-colors"
+              >
+                <Info size={13} /> Como funciona
+              </button>
               <button
                 onClick={onHall}
                 className="flex items-center gap-1.5 text-xs font-semibold text-amber-400/80 hover:text-amber-300 transition-colors"
@@ -2012,7 +2021,103 @@ function SeasonHub({
           handleAbandon()
         }}
       />
+      <SeasonFlowModal open={showFlow} onClose={() => setShowFlow(false)} season={s} />
     </div>
+  )
+}
+
+// ─── "Como funciona" — de onde vêm os times de cada campeonato da temporada ──
+
+function slotRankPhrase(rankFrom: number, rankTo: number): string {
+  if (rankFrom === 1 && rankTo === 1) return 'o campeão'
+  if (rankFrom === 1) return `os ${rankTo} melhores colocados`
+  if (rankFrom === rankTo) return `o ${rankFrom}º colocado`
+  return `do ${rankFrom}º ao ${rankTo}º colocado`
+}
+
+function SlotFlowCard({ flow }: { flow: SlotFlow }) {
+  const Icon = FORMAT_META[flow.format].icon
+  return (
+    <div className="rounded-xl border border-white/5 bg-ink-850/40 p-3.5">
+      <div className="flex items-center gap-2">
+        <Icon size={14} className="shrink-0 text-blood-400" />
+        <p className="text-sm font-bold text-zinc-100">{flow.slotName}</p>
+        <span className="ml-auto shrink-0 text-[11px] text-zinc-600">
+          {flow.fixedCount != null ? `${flow.fixedCount} time${flow.fixedCount === 1 ? '' : 's'} fixo${flow.fixedCount === 1 ? '' : 's'}` : 'todo o pool'}
+        </span>
+      </div>
+      {(flow.sources.length > 0 || flow.boundaryLinks.length > 0 || flow.extraNotes.length > 0) && (
+        <div className="mt-2 space-y-1.5 border-t border-white/5 pt-2">
+          {flow.sources.map((src, i) => (
+            <p key={i} className="flex items-start gap-1.5 text-xs leading-snug text-zinc-400">
+              <ChevronRight size={13} className="mt-0.5 shrink-0 text-zinc-600" />
+              Recebe {slotRankPhrase(src.rankFrom, src.rankTo)} de <span className="font-medium text-zinc-300">{src.fromSlotName}</span>
+              {src.rankFrom !== 1 || src.rankTo !== 1 ? ` (${src.count} vaga${src.count === 1 ? '' : 's'})` : ''}
+            </p>
+          ))}
+          {flow.boundaryLinks.map((link, i) => (
+            <p key={i} className="flex items-start gap-1.5 text-xs leading-snug text-zinc-400">
+              <ChevronRight size={13} className="mt-0.5 shrink-0 text-zinc-600" />
+              {link.direction === 'desce-pra' ? (
+                <>
+                  Os últimos {link.count} colocados descem pra <span className="font-medium text-zinc-300">{link.partnerSlotName}</span>, que manda os primeiros {link.count} pra cá
+                </>
+              ) : (
+                <>
+                  Os primeiros {link.count} colocados sobem pra <span className="font-medium text-zinc-300">{link.partnerSlotName}</span>, que manda os últimos {link.count} pra cá
+                </>
+              )}
+              {link.playInSlotName && (
+                <span className="text-zinc-500"> — a última vaga é decidida por {link.playInSlotName}, não pela tabela</span>
+              )}
+            </p>
+          ))}
+          {flow.extraNotes.map((note, i) => (
+            <p key={`n${i}`} className="flex items-start gap-1.5 text-xs italic leading-snug text-zinc-500">
+              <ChevronRight size={13} className="mt-0.5 shrink-0 text-zinc-700" />
+              {note}
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SeasonFlowModal({ open, onClose, season }: { open: boolean; onClose: () => void; season: Season }) {
+  const flows = useMemo(() => (open ? seasonFlow(season) : []), [open, season])
+  const hasFlow = useMemo(() => seasonHasFlow(season), [season])
+  const dynamicCount = flows.filter((f) => f.sources.length > 0).length
+  const boundaryCount = (season.divisionBoundaries?.length ?? 0)
+
+  return (
+    <Modal open={open} onClose={onClose} maxWidth="max-w-2xl">
+      <div className="border-b border-white/5 px-5 py-4">
+        <div className="flex items-center gap-2">
+          <Info size={18} className="text-blood-400" />
+          <h2 className="heading text-lg text-white">Como funciona {season.name}</h2>
+        </div>
+        <p className="mt-1.5 text-xs leading-snug text-zinc-500">
+          {season.slots.length} campeonato{season.slots.length === 1 ? '' : 's'} por ano
+          {dynamicCount > 0 && <> · {dynamicCount} com vagas dinâmicas</>}
+          {boundaryCount > 0 && <> · {boundaryCount} divisão{boundaryCount === 1 ? '' : 'ões'} interligada{boundaryCount === 1 ? '' : 's'}</>}
+        </p>
+      </div>
+      <div className="max-h-[65vh] overflow-y-auto p-4">
+        {!hasFlow ? (
+          <p className="rounded-xl border border-white/5 bg-ink-850/40 p-4 text-sm leading-relaxed text-zinc-400">
+            Essa temporada não tem nenhuma vaga dinâmica — cada campeonato usa sempre o mesmo elenco fixo, ano após ano, sem
+            classificação entre eles.
+          </p>
+        ) : (
+          <div className="space-y-2.5">
+            {flows.map((f) => (
+              <SlotFlowCard key={f.slotId} flow={f} />
+            ))}
+          </div>
+        )}
+      </div>
+    </Modal>
   )
 }
 
