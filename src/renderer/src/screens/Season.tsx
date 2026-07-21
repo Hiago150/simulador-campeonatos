@@ -42,7 +42,7 @@ import type {
 } from '../types'
 import { useApp } from '../store/app'
 import { useSeasons, resolveSlotArrivals, type SlotArrival } from '../store/season'
-import { useHistory } from '../store/history'
+import { eraHeadToHead } from '../lib/season-insights'
 import { presetsForSport } from '../data/teams'
 import { collectionsForSport, collectionsGrouped } from '../data/collections'
 import { seasonPresetsGrouped, type SeasonPreset } from '../data/season-presets'
@@ -607,7 +607,33 @@ function SeasonWizard({ onBack, onDone }: { onBack: () => void; onDone: (s: Seas
 
   const removeSlot = (idx: number) => {
     const removed = slots[idx]
-    setSlots((prev) => prev.filter((_, i) => i !== idx))
+    setSlots((prev) =>
+      prev
+        .filter((_, i) => i !== idx)
+        // limpa as referências dos OUTROS slots ao excluído — sem isso ficam
+        // fontes de classificação/bye/wildcards penduradas apontando pra um
+        // id que não existe mais (silenciosas no motor, confusas na UI)
+        .map((s) => {
+          if (!removed) return s
+          const qualifiesFrom = s.qualifiesFrom?.filter((q) => q.slotId !== removed.id)
+          const regions = s.vctConsistencyWildcards?.regions.filter(
+            (r) =>
+              r.kickoffSlotId !== removed.id &&
+              r.stage1SlotId !== removed.id &&
+              r.stage2PlayoffsSlotId !== removed.id &&
+              r.stage2PlayInsSlotId !== removed.id
+          )
+          return {
+            ...s,
+            qualifiesFrom: qualifiesFrom?.length ? qualifiesFrom : undefined,
+            previousYearBye: s.previousYearBye?.fromSlotId === removed.id ? undefined : s.previousYearBye,
+            vctConsistencyWildcards:
+              s.vctConsistencyWildcards && regions?.length
+                ? { ...s.vctConsistencyWildcards, regions }
+                : undefined
+          }
+        })
+    )
     if (removed) {
       setBoundaries((prev) =>
         prev
@@ -662,13 +688,27 @@ function SeasonWizard({ onBack, onDone }: { onBack: () => void; onDone: (s: Seas
   }
 
   const handleCreate = () => {
+    // o pool é a fonte da verdade: se o usuário tirou um time do pool depois
+    // de montar os campeonatos (ex.: aplicou preset e desmarcou), o elenco
+    // fixo do slot não pode continuar referenciando esse time
+    const poolSet = new Set(poolIds)
+    const cleanSlots = slots.map((sl) => {
+      if (!sl.teamIds) return sl
+      const teamIds = sl.teamIds.filter((id) => poolSet.has(id))
+      return { ...sl, teamIds: teamIds.length ? teamIds : undefined }
+    })
+    const cleanBoundaries = validBoundaries.filter((b) => {
+      const upper = cleanSlots.find((x) => x.id === b.upperSlotId)
+      const lower = cleanSlots.find((x) => x.id === b.lowerSlotId)
+      return !!upper?.teamIds?.length && !!lower?.teamIds?.length
+    })
     const s = createSeason({
       name: name.trim(),
       sport,
       game: sport === 'esports' ? game : undefined,
       period,
-      slots,
-      divisionBoundaries: validBoundaries.length ? validBoundaries : undefined,
+      slots: cleanSlots,
+      divisionBoundaries: cleanBoundaries.length ? cleanBoundaries : undefined,
       teamPool: selectedTeams
     })
     onDone(s)
@@ -1143,17 +1183,45 @@ function SlotEditor({
     onChange({ config: { ...slot.config, ...patch } })
 
   const slotTeamIds = slot.teamIds ?? []
+  const setSlotTeamIds = (ids: string[]) => onChange({ teamIds: ids.length ? ids : undefined })
   const toggleSlotTeam = (id: string) =>
-    onChange({
-      teamIds: slotTeamIds.includes(id) ? slotTeamIds.filter((x) => x !== id) : [...slotTeamIds, id]
-    })
+    setSlotTeamIds(slotTeamIds.includes(id) ? slotTeamIds.filter((x) => x !== id) : [...slotTeamIds, id])
   const filteredPool = poolTeams.filter(
     (t) => !teamSearch || t.name.toLowerCase().includes(teamSearch.toLowerCase())
   )
 
-  // classificação dinâmica: times deste slot vêm dos melhores de campeonato(s) anterior(es)
+  // segurar e arrastar seleciona/desmarca em sequência — mesmo padrão do
+  // seletor de pool da temporada e do Criar Campeonato
+  const paintValueRef = useRef<boolean | null>(null)
+  const isPaintingRef = useRef(false)
+  useEffect(() => {
+    const onUp = () => {
+      isPaintingRef.current = false
+      paintValueRef.current = null
+    }
+    window.addEventListener('mouseup', onUp)
+    return () => window.removeEventListener('mouseup', onUp)
+  }, [])
+  const applySlotPaint = (id: string, value: boolean) => {
+    const has = slotTeamIds.includes(id)
+    if (value && !has) setSlotTeamIds([...slotTeamIds, id])
+    else if (!value && has) setSlotTeamIds(slotTeamIds.filter((x) => x !== id))
+  }
+  const startPaintSlotTeam = (id: string) => {
+    const value = !slotTeamIds.includes(id)
+    isPaintingRef.current = true
+    paintValueRef.current = value
+    applySlotPaint(id, value)
+  }
+  const continuePaintSlotTeam = (id: string) => {
+    if (isPaintingRef.current && paintValueRef.current !== null) applySlotPaint(id, paintValueRef.current)
+  }
+
+  // classificação dinâmica: times deste slot vêm dos melhores de campeonato(s)
+  // anterior(es) — QUALQUER campeonato anterior serve de fonte (inclusive os
+  // de pool inteiro: todo campeonato encerrado tem classificação final)
   const qualifiers = slot.qualifiesFrom ?? []
-  const eligibleSources = earlierSlots.filter((s) => (s.teamIds && s.teamIds.length) || s.qualifiesFrom?.length)
+  const eligibleSources = earlierSlots
   const updateQualifiers = (next: { slotId: string; count: number }[]) =>
     onChange({ qualifiesFrom: next.length ? next : undefined })
   const addQualifier = () => {
@@ -1349,22 +1417,35 @@ function SlotEditor({
                       onChange={(e) => setTeamSearch(e.target.value)}
                     />
                   </div>
+                  <button
+                    onClick={() => setSlotTeamIds(poolTeams.map((t) => t.id))}
+                    className="shrink-0 text-xs text-zinc-500 underline hover:text-zinc-200"
+                  >
+                    Selecionar todos
+                  </button>
                   {slotTeamIds.length > 0 && (
                     <button
                       onClick={() => onChange({ teamIds: undefined })}
                       className="shrink-0 text-xs text-zinc-500 underline hover:text-zinc-200"
                     >
-                      usar pool inteiro
+                      Limpar
                     </button>
                   )}
                 </div>
-                <div className="grid max-h-56 grid-cols-2 gap-1.5 overflow-y-auto pr-1 sm:grid-cols-3">
+                <div className="grid max-h-56 select-none grid-cols-2 gap-1.5 overflow-y-auto pr-1 sm:grid-cols-3">
                   {filteredPool.map((t) => {
                     const sel = slotTeamIds.includes(t.id)
                     return (
                       <button
                         key={t.id}
-                        onClick={() => toggleSlotTeam(t.id)}
+                        onMouseDown={() => startPaintSlotTeam(t.id)}
+                        onMouseEnter={() => continuePaintSlotTeam(t.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            toggleSlotTeam(t.id)
+                          }
+                        }}
                         className={cx(
                           'flex items-center gap-2 rounded-lg border p-1.5 text-left transition',
                           sel ? 'border-blood-600/50 bg-blood-950/25' : 'border-white/5 bg-ink-800/60 hover:border-white/15'
@@ -1377,8 +1458,9 @@ function SlotEditor({
                   })}
                 </div>
                 <p className="text-[11px] leading-snug text-zinc-600">
-                  Sem seleção, o campeonato usa o pool inteiro da temporada. Pra interligar divisões
-                  (acesso/descenso), cada divisão precisa de um elenco próprio.
+                  Segure e arraste pra selecionar vários de uma vez. Sem seleção, o campeonato usa o
+                  pool inteiro da temporada (e mesmo assim vale como fonte de classificação). Pra
+                  interligar divisões (acesso/descenso), cada divisão precisa de um elenco próprio.
                 </p>
               </div>
             )}
@@ -1640,6 +1722,13 @@ function SeasonHub({
     const arrivals = [...baseArrivals, ...resolveVCTExtraArrivals(currentSlot, s, thisYear?.slotRankings, baseArrivals)]
     const allIds = arrivals.map((a) => a.teamId)
     const slotTeams: Team[] = allIds.length ? s.teamPool.filter((t) => allIds.includes(t.id)) : s.teamPool
+    // fontes de classificação ainda não disputadas (ou times fora do pool)
+    // podem deixar o slot com menos de 2 times — melhor avisar que criar um
+    // campeonato quebrado
+    if (slotTeams.length < 2) {
+      useApp.getState().setToast(`"${currentSlot.name}" não tem times suficientes — confira as fontes de classificação`)
+      return
+    }
     startTournament({
       name: currentSlot.name,
       sport: s.sport,
@@ -1666,6 +1755,15 @@ function SeasonHub({
     const rosterOverrides = useApp.getState().rosterOverrides
     const footballRosterOverrides = useApp.getState().footballRosterOverrides
 
+    // se o campeonato deste slot já foi aberto pela tela de torneio (pendente),
+    // descarta — o bulk vai simular o slot por conta própria, e sem isso o
+    // pendente sobrava como "em andamento" fantasma na Home, sem Concluir
+    const pendingId = useSeasons.getState().pendingTournamentId
+    const cur = useApp.getState().current
+    if (pendingId && cur?.id === pendingId && cur.fromSeason) {
+      useApp.getState().clearCurrentTournament()
+    }
+
     const stop = () => {
       setBulkSimulating(false)
       const active = useSeasons.getState().activeSeason
@@ -1691,6 +1789,11 @@ function SeasonHub({
         const slotTeams: Team[] = allIds.length
           ? active.teamPool.filter((t) => allIds.includes(t.id))
           : active.teamPool
+        if (slotTeams.length < 2) {
+          useApp.getState().setToast(`"${slot.name}" não tem times suficientes — parei por aqui`)
+          stop()
+          return
+        }
         const built = createTournament({
           name: slot.name,
           sport: active.sport,
@@ -2135,7 +2238,6 @@ function SeasonYearSummary({
   const activeSeason = useSeasons((s) => s.activeSeason)
   const startNextYear = useSeasons((s) => s.startNextYear)
   const abandonSeason = useSeasons((s) => s.abandonSeason)
-  const historyData = useHistory((s) => s.data)
   const viewTournament = useApp((s) => s.viewTournament)
 
   if (!activeSeason) return null
@@ -2147,17 +2249,15 @@ function SeasonYearSummary({
   const sport = SPORT_META[s.sport]
   const game = s.game ? GAME_META[s.game] : null
   const poolMap = Object.fromEntries(s.teamPool.map((t) => [t.id, t]))
-  const poolIds = new Set(s.teamPool.map((t) => t.id))
 
   const yearScorers = [...(yearEntry?.scorers ?? [])].sort((a, b) => compareScorers(s.sport, a, b))
   const allTimeScorers = [...s.allTimeScorers].sort((a, b) => compareScorers(s.sport, a, b))
   const allTimeWins = Object.entries(s.allTimeWins).sort(([, a], [, b]) => b - a)
 
-  // Head-to-head: top clashes between pool teams
-  const h2hClashes = Object.values(historyData.headToHead)
-    .filter((h) => poolIds.has(h.aId) && poolIds.has(h.bId))
-    .sort((a, b) => b.aWins + b.bWins + b.draws - (a.aWins + a.bWins + a.draws))
-    .slice(0, 4)
+  // Confrontos clássicos DA ERA (dos campeonatos salvos desta temporada) —
+  // a temporada é isolada do histórico global, então usar historyData aqui
+  // misturava confrontos de campeonatos avulsos no resumo do ano
+  const h2hClashes = eraHeadToHead(s, 2).slice(0, 4)
 
   const handleNext = () => {
     startNextYear()
@@ -2384,9 +2484,9 @@ function SeasonYearSummary({
               {h2hClashes.map((h) => {
                 const a = poolMap[h.aId]
                 const b = poolMap[h.bId]
-                const total = h.aWins + h.bWins + h.draws
+                const total = h.games
                 return (
-                  <div key={h.key} className="rounded-xl bg-ink-800/60 px-3 py-2.5">
+                  <div key={`${h.aId}|${h.bId}`} className="rounded-xl bg-ink-800/60 px-3 py-2.5">
                     <div className="flex items-center gap-2">
                       {a && <TeamBadge team={a} size="sm" />}
                       <span className="flex-1 min-w-0 text-xs font-semibold text-zinc-200 truncate">{a?.name ?? h.aId}</span>

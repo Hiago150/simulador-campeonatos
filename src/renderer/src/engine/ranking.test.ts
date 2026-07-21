@@ -194,6 +194,49 @@ describe('computeMovements — acesso/descenso entre divisões', () => {
     expect(next[1].teamIds!.sort()).toEqual(['a3', 'a4', 'b1', 'b2'])
   })
 
+  it('play-in: campeão que TAMBÉM é 1º posicional não engole a vaga posicional (tamanhos estáveis)', () => {
+    const slots = [
+      mkSlot('a', 'Série A', ['a1', 'a2', 'a3', 'a4']),
+      mkSlot('b', 'Série B', ['b1', 'b2', 'b3', 'b4']),
+      mkSlot('playin', 'Repescagem', [])
+    ]
+    const rankings = {
+      a: ['a2', 'a1', 'a4', 'a3'], // últimos 2: a4, a3
+      b: ['b3', 'b1', 'b2', 'b4'],
+      playin: ['b3', 'b1'] // campeão do play-in É o 1º posicional (b3)
+    }
+    const { slots: next, movements } = computeMovements(
+      slots,
+      [{ upperSlotId: 'a', lowerSlotId: 'b', count: 2, playInSlotId: 'playin' }],
+      rankings,
+      (id) => id
+    )
+    // sobem 2 mesmo assim: b3 (campeão do play-in) + b1 (próximo posicional)
+    expect(movements.filter((m) => m.kind === 'promotion').map((m) => m.teamId).sort()).toEqual(['b1', 'b3'])
+    expect(next[0].teamIds).toHaveLength(4)
+    expect(next[1].teamIds).toHaveLength(4)
+  })
+
+  it('play-in: campeão que não é da divisão inferior é ignorado (volta ao posicional)', () => {
+    const slots = [
+      mkSlot('a', 'Série A', ['a1', 'a2', 'a3', 'a4']),
+      mkSlot('b', 'Série B', ['b1', 'b2', 'b3', 'b4']),
+      mkSlot('playin', 'Qualificatório', [])
+    ]
+    const rankings = {
+      a: ['a2', 'a1', 'a4', 'a3'],
+      b: ['b3', 'b1', 'b2', 'b4'],
+      playin: ['x9', 'b4'] // campeão de fora do elenco da Série B
+    }
+    const { movements } = computeMovements(
+      slots,
+      [{ upperSlotId: 'a', lowerSlotId: 'b', count: 2, playInSlotId: 'playin' }],
+      rankings,
+      (id) => id
+    )
+    expect(movements.filter((m) => m.kind === 'promotion').map((m) => m.teamId).sort()).toEqual(['b1', 'b3'])
+  })
+
   it('play-in sem classificação neste ano cai de volta pro posicional', () => {
     const slots = [
       mkSlot('a', 'Série A', ['a1', 'a2', 'a3', 'a4']),

@@ -240,10 +240,14 @@ export function computeMovements(
     // play-in: a última vaga de acesso não é posicional — é o campeão do
     // slot de play-in (ex.: Série B com repescagem, ou qualificatório à
     // parte). Se o play-in não rodou neste ano, cai de volta pro posicional.
+    // O campeão precisa ser um time da divisão inferior (campeão de fora não
+    // pode "subir"), e as vagas posicionais são preenchidas EXCLUINDO o
+    // campeão — senão, quando ele também é um dos primeiros da tabela, uma
+    // vaga de acesso se perde e os tamanhos das divisões derivam.
     if (b.playInSlotId) {
       const champion = rankings[b.playInSlotId]?.[0]
-      if (champion) {
-        const positional = loRank.slice(0, Math.max(0, n - 1)).filter((id) => id !== champion)
+      if (champion && lower.teamIds.includes(champion)) {
+        const positional = loRank.filter((id) => id !== champion).slice(0, Math.max(0, n - 1))
         promoted = [...positional, champion]
       }
     }
@@ -390,7 +394,12 @@ export const useSeasons = create<SeasonStore>()(
         // desacoplado do objeto ao vivo em useApp.current
         const tournamentSnapshot: Tournament = JSON.parse(JSON.stringify(tournament))
 
-        let years = JSON.parse(JSON.stringify(active.years)) as SeasonYearEntry[]
+        // clona SÓ o ano corrente (o único que muda) — clonar a era inteira
+        // (com todos os snapshots de campeonato de todos os anos) fazia cada
+        // conclusão de slot ficar mais lenta conforme a temporada avançava
+        const years = active.years.map((y) =>
+          y.year === active.currentYear ? (JSON.parse(JSON.stringify(y)) as SeasonYearEntry) : y
+        )
 
         const yIdx = years.findIndex((y) => y.year === active.currentYear)
         if (yIdx >= 0) {
