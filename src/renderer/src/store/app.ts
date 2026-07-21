@@ -15,7 +15,7 @@ import type { FootballPlayerOverride } from '../engine/names'
 import { uid } from '../engine/rng'
 import { useHistory } from './history'
 
-export type Screen = 'home' | 'setup' | 'tournament' | 'history' | 'teams' | 'stats' | 'season'
+export type Screen = 'home' | 'setup' | 'tournament' | 'history' | 'teams' | 'stats' | 'season' | 'career'
 
 export interface CustomTeamInput {
   name: string

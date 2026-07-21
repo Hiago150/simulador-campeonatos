@@ -1,10 +1,11 @@
-import { BarChart3, CalendarDays, History, Home, Users } from 'lucide-react'
+import { BarChart3, Briefcase, CalendarDays, History, Home, Users } from 'lucide-react'
 import { useApp, type Screen } from '../store/app'
 import { cx } from '../lib/cx'
 
 const NAV: { screen: Screen; label: string; icon: typeof Home }[] = [
   { screen: 'home', label: 'Início', icon: Home },
   { screen: 'season', label: 'Temporada', icon: CalendarDays },
+  { screen: 'career', label: 'Carreira', icon: Briefcase },
   { screen: 'stats', label: 'Stats', icon: BarChart3 },
   { screen: 'history', label: 'Histórico', icon: History },
   { screen: 'teams', label: 'Times', icon: Users }

@@ -11,6 +11,7 @@ import { HistoryScreen } from './screens/History'
 import { TeamsScreen } from './screens/Teams'
 import { StatsScreen } from './screens/Stats'
 import { SeasonScreen } from './screens/Season'
+import { CareerScreen } from './screens/Career'
 
 const SCREENS = {
   home: HomeScreen,
@@ -19,7 +20,8 @@ const SCREENS = {
   history: HistoryScreen,
   teams: TeamsScreen,
   stats: StatsScreen,
-  season: SeasonScreen
+  season: SeasonScreen,
+  career: CareerScreen
 } as const
 
 export default function App() {
