@@ -17,6 +17,32 @@ import type {
 } from '../types-career'
 import { clamp, hashString, mulberry32 } from './rng'
 
+// ─── Finanças (Fase 2) — todos os valores em "M" (milhões). Provisório. ──────
+
+/** salário anual (M) a partir do OVR — cresce forte no topo */
+export function playerSalary(overall: number): number {
+  const s = Math.pow(Math.max(0, overall - 40) / 12, 2) * 0.9 + 0.2
+  return Math.round(s * 10) / 10
+}
+
+/** valor de mercado (M) — OVR (peso maior), idade, potencial e contrato */
+export function playerValue(overall: number, age: number, potential: number, contractYears: number): number {
+  const base = Math.pow(Math.max(0, overall - 40) / 10, 2.6) * 3
+  const ageFactor = age <= 23 ? 1.3 : age <= 27 ? 1.15 : age <= 30 ? 1.0 : age <= 32 ? 0.7 : 0.4
+  const potFactor = 1 + Math.max(0, potential - overall) * 0.03
+  const contractFactor = contractYears <= 1 ? 0.6 : contractYears === 2 ? 0.85 : 1.0
+  return Math.max(1, Math.round(base * ageFactor * potFactor * contractFactor))
+}
+
+/** preenche os campos financeiros de um jogador (contrato seeded 1-4 anos) */
+export function withFinance(p: Omit<CareerPlayer, 'contractYears' | 'salary' | 'value'>): CareerPlayer {
+  const rnd = mulberry32(hashString(p.id + 'contract'))
+  const contractYears = 1 + Math.floor(rnd() * 4) // 1-4
+  const salary = playerSalary(p.overall)
+  const value = playerValue(p.overall, p.age, p.potential, contractYears)
+  return { ...p, contractYears, salary, value }
+}
+
 // ─── Formações: quantos por linha (GK é sempre 1) ────────────────────────────
 
 export const FORMATIONS: Record<FormationId, { def: number; mid: number; fwd: number }> = {
@@ -57,7 +83,7 @@ export function generateCareerRoster(
     const headroom = Math.max(0, 28 - age)
     const potential = clamp(overall + Math.round(rnd() * Math.min(12, headroom * 2)), overall, 99)
 
-    return { id: p.id, name: p.name, position: p.position, age, overall, potential }
+    return withFinance({ id: p.id, name: p.name, position: p.position, age, overall, potential })
   })
 }
 
@@ -299,7 +325,12 @@ export function evolvePlayer(p: CareerPlayer, year: number): CareerPlayer {
   const cap = age <= 29 ? p.potential : 99
   const overall = clamp(Math.min(p.overall + delta, cap), 40, 99)
   const potential = age >= 28 ? overall : Math.max(p.potential, overall)
-  return { ...p, age, overall, potential }
+  // contrato corre 1 ano; ao vencer, o clube retém (renovação MANUAL é F3 —
+  // aqui auto-renova pra 3 anos pra não criar agente livre antes da hora)
+  const contractYears = p.contractYears <= 1 ? 3 : p.contractYears - 1
+  // salário fixo pelo contrato; valor de mercado acompanha idade/OVR/contrato
+  const value = playerValue(overall, age, potential, contractYears)
+  return { ...p, age, overall, potential, contractYears, value }
 }
 
 // ─── Ofertas de emprego (decidido R3: quantidade+porte escalam; sempre ≥1) ───
@@ -336,4 +367,80 @@ export function generateOffers(
         : `${t.name} aposta na sua reconstrução — projeto humilde, palavra de tempo.`
     return { clubId: t.id, tier, note }
   })
+}
+
+// ─── Força derivada do elenco (Fase 2: liga inteira "viva") ──────────────────
+
+/** força/setores de um clube a partir do MELHOR XI do elenco dele (4-3-3) */
+export function deriveClubStrength(players: CareerPlayer[]): LineupSectors {
+  return lineupSectors(players, bestLineup(players, '4-3-3'))
+}
+
+// ─── Finanças do clube (Fase 2) ──────────────────────────────────────────────
+
+const BUDGET_BY_TIER: Record<ClubTier, number> = { gigante: 180, grande: 70, medio: 22, pequeno: 7 }
+
+/** caixa inicial de transferências por porte (M) */
+export function startingBudget(tier: ClubTier): number {
+  return BUDGET_BY_TIER[tier]
+}
+
+/** folha atual (soma dos salários) */
+export function wageBill(players: CareerPlayer[]): number {
+  return Math.round(players.reduce((s, p) => s + p.salary, 0) * 10) / 10
+}
+
+/** teto de folha: folha inicial + 25% de espaço pra contratar (garante que o
+ *  elenco atual sempre cabe). */
+export function wageCapFor(players: CareerPlayer[]): number {
+  return Math.round(wageBill(players) * 1.25 * 10) / 10
+}
+
+/** receita do fim do ano (M) = base por porte + premiação pela campanha */
+export function seasonRevenue(tier: ClubTier, position: number, totalTeams: number, champion: boolean): number {
+  const base = BUDGET_BY_TIER[tier] * 0.5
+  const prize = Math.max(0, totalTeams - position) * 1.5 + (champion ? 40 : 0)
+  return Math.round((base + prize) * 10) / 10
+}
+
+// ─── Negociação de transferência (Fase 2) ────────────────────────────────────
+
+const TIER_RANK: Record<ClubTier, number> = { pequeno: 0, medio: 1, grande: 2, gigante: 3 }
+
+/** preço "pedido" pelo clube vendedor (M) — valor × multiplicador */
+export function askingPrice(value: number, isStarter: boolean, contractYears: number): number {
+  const starterMul = isStarter ? 1.6 : 1.1
+  const contractMul = contractYears <= 1 ? 0.6 : contractYears === 2 ? 0.85 : 1.0
+  return Math.max(1, Math.round(value * starterMul * contractMul))
+}
+
+export interface NegotiationResult {
+  status: 'accepted' | 'counter' | 'refused'
+  /** counter: contraproposta do vendedor (M) */
+  counter?: number
+  /** motivo em PT-BR (refused/counter) */
+  reason?: string
+}
+
+/**
+ * Resposta do clube vendedor a uma oferta de compra. "Vontade própria" (R4):
+ * um titular de clube maior recusa cair pra um clube menor (sem via de salário
+ * nesta fase — sweetener salarial fica pra F3). Fora isso: aceita se a oferta
+ * cobre o pedido, contrapropõe se está perto, recusa se está baixa.
+ */
+export function negotiateFee(
+  value: number,
+  isStarter: boolean,
+  contractYears: number,
+  sellerTier: ClubTier,
+  buyerTier: ClubTier,
+  offeredFee: number
+): NegotiationResult {
+  if (isStarter && TIER_RANK[buyerTier] < TIER_RANK[sellerTier]) {
+    return { status: 'refused', reason: 'O jogador é titular e não quer descer de nível — nem por dinheiro (por ora).' }
+  }
+  const ask = askingPrice(value, isStarter, contractYears)
+  if (offeredFee >= ask) return { status: 'accepted' }
+  if (offeredFee >= ask * 0.85) return { status: 'counter', counter: ask, reason: 'Chegou perto — o clube pede um pouco mais.' }
+  return { status: 'refused', reason: 'Oferta muito abaixo do que o clube pede.' }
 }

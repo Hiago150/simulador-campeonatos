@@ -12,6 +12,10 @@ export interface CareerPlayer {
   age: number
   overall: number // 40-99
   potential: number // >= overall enquanto jovem; converge com a idade
+  // ── financeiro (Fase 2) ──
+  contractYears: number // anos restantes de contrato
+  salary: number // M/ano (fixo até renovar — renovação é F3)
+  value: number // valor de mercado (M) — recalculado a cada virada de ano
 }
 
 /** formações da Fase 1 — GK é sempre 1; linhas somam 10 */
@@ -83,9 +87,26 @@ export interface YearReview {
   text: string
   /** maiores evoluções/quedas do elenco na virada do ano */
   evolution: { playerId: string; name: string; before: number; after: number }[]
+  /** receita do ano que entrou no caixa (M) — Fase 2 */
+  revenue?: number
 }
 
 export type CareerStatus = 'in-season' | 'year-review' | 'offers'
+
+/** janela de transferências (Fase 2) — null = mercado só leitura */
+export type TransferWindow = 'pre-season' | 'mid-season'
+
+export interface TransferRecord {
+  year: number
+  window: TransferWindow
+  playerId: string
+  playerName: string
+  fromClubId: string
+  fromClubName: string
+  toClubId: string
+  toClubName: string
+  fee: number // M
+}
 
 export interface Career {
   id: string
@@ -94,9 +115,24 @@ export interface Career {
   /** clubes da liga (snapshot, sem elenco — só o clube do usuário tem jogadores) */
   teams: import('./types').Team[]
   clubId: string
+  /** elenco do clube do usuário (fonte da verdade do SEU time) */
   players: CareerPlayer[]
+  /** elencos "vivos" de TODOS os outros clubes da liga — a força deles deriva
+   *  daqui (Fase 2). Vender pro rival fortalece o rival de verdade. */
+  rostersByClub: Record<string, CareerPlayer[]>
   lineup: CareerLineup
   year: number
+  // ── finanças + mercado (Fase 2) ──
+  /** caixa de transferências (M) */
+  budget: number
+  /** teto de folha salarial (M/ano) — trava dura */
+  wageBudget: number
+  /** janela aberta agora (null = mercado só leitura) */
+  window: TransferWindow | null
+  /** a janela intermediária já abriu neste ano? (abre 1× no meio das rodadas) */
+  midSeasonOpened: boolean
+  /** histórico de transferências (feedback/extrato) */
+  marketLog: TransferRecord[]
   /** 1-100 — atravessa clubes, é do TÉCNICO */
   reputation: number
   /** 0-100 — é do vínculo com o clube atual */

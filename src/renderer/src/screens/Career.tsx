@@ -3,16 +3,21 @@
 // existente e responde à diretoria. Sem mercado ainda (Fase 2).
 import { useMemo, useState } from 'react'
 import {
+  ArrowLeft,
   ArrowRight,
+  ArrowRightLeft,
   Briefcase,
   Check,
   ChevronRight,
+  Coins,
   Crown,
   FastForward,
   Flag,
   Play,
   RotateCcw,
+  Search,
   Shield,
+  ShoppingCart,
   TrendingDown,
   TrendingUp,
   Trophy,
@@ -31,8 +36,10 @@ import {
   FORMATIONS,
   FORMATION_IDS,
   TIER_LABEL,
+  askingPrice,
   clubTier,
-  lineupSectors
+  lineupSectors,
+  wageBill
 } from '../engine/career'
 import { Button, Modal } from '../components/ui'
 import { StandingsTable } from '../components/StandingsTable'
@@ -218,14 +225,17 @@ function CareerHub() {
   const setFormation = useCareer((s) => s.setFormation)
   const setStarter = useCareer((s) => s.setStarter)
   const autoLineup = useCareer((s) => s.autoLineup)
+  const closeWindow = useCareer((s) => s.closeWindow)
   const abandonCareer = useCareer((s) => s.abandonCareer)
 
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null)
   const [swapSlot, setSwapSlot] = useState<number | null>(null)
   const [showSquad, setShowSquad] = useState(false)
   const [confirmAbandon, setConfirmAbandon] = useState(false)
+  const [showMarket, setShowMarket] = useState(false)
 
   const c = career!
+  const windowOpen = !!c.window
   const t = c.tournament
   const club = c.teams.find((x) => x.id === c.clubId)!
   const teams = useMemo(() => (t ? teamMap(t) : {}), [t])
@@ -251,6 +261,9 @@ function CareerHub() {
     .sort((a, b) => POS_ORDER[a.position] - POS_ORDER[b.position] || b.overall - a.overall)
 
   const tier = clubTier(club.strength)
+
+  // early-return DEPOIS de todos os hooks (ordem de hooks estável)
+  if (showMarket && windowOpen) return <MarketView onBack={() => setShowMarket(false)} />
 
   return (
     <div className="h-full overflow-y-auto">
@@ -302,14 +315,60 @@ function CareerHub() {
           <MeterCard label="Reputação do técnico" value={c.reputation} />
         </div>
 
+        {/* Finanças */}
+        <div className="mb-5 grid gap-3 sm:grid-cols-2">
+          <div className="panel flex items-center gap-3 px-4 py-3">
+            <Coins size={18} className="shrink-0 text-gold-400" />
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Caixa de transferências</p>
+              <p className="tnum text-lg font-bold text-zinc-100">{c.budget}M</p>
+            </div>
+          </div>
+          <div className="panel px-4 py-3">
+            <div className="flex items-baseline justify-between">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Folha salarial</p>
+              <p className="tnum text-xs text-zinc-400">
+                <span className="font-bold text-zinc-100">{wageBill(c.players)}M</span> / {c.wageBudget}M
+              </p>
+            </div>
+            <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-ink-800">
+              <div
+                className="h-full rounded-full bg-gold-grad transition-all"
+                style={{ width: `${Math.min(100, (wageBill(c.players) / c.wageBudget) * 100)}%` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Janela de transferências aberta */}
+        {windowOpen && (
+          <div className="animate-fade-up mb-5 flex flex-wrap items-center gap-3 rounded-xl border border-blood-600/40 bg-blood-950/25 p-4">
+            <ArrowRightLeft size={18} className="shrink-0 text-blood-400" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-zinc-100">
+                Janela {c.window === 'pre-season' ? 'de pré-temporada' : 'intermediária'} aberta
+              </p>
+              <p className="text-xs text-zinc-500">
+                Contrate e venda antes de {c.window === 'pre-season' ? 'a temporada começar' : 'retomar'}. Simular fica travado enquanto a janela estiver aberta.
+              </p>
+            </div>
+            <Button icon={<ShoppingCart size={14} />} onClick={() => setShowMarket(true)}>
+              Abrir mercado
+            </Button>
+            <Button variant="primary" icon={<Check size={14} />} onClick={closeWindow}>
+              {c.window === 'pre-season' ? 'Começar a temporada' : 'Retomar temporada'}
+            </Button>
+          </div>
+        )}
+
         {/* Ações do ano */}
         <div className="mb-5 flex flex-wrap items-center gap-2">
           {!finished ? (
             <>
-              <Button icon={<Play size={14} />} disabled={!t || roundInfo.matchIds.length === 0} onClick={simRound}>
+              <Button icon={<Play size={14} />} disabled={!t || windowOpen || roundInfo.matchIds.length === 0} onClick={simRound}>
                 Simular {roundInfo.label ? roundInfo.label.split(' · ')[0].toLowerCase() : 'rodada'}
               </Button>
-              <Button variant="primary" icon={<FastForward size={15} />} disabled={!t} onClick={simYear}>
+              <Button variant="primary" icon={<FastForward size={15} />} disabled={!t || windowOpen} onClick={simYear}>
                 Simular a temporada inteira
               </Button>
             </>
@@ -660,6 +719,17 @@ function YearReviewView() {
           <DeltaCard label="Reputação do técnico" delta={r.reputationDelta} end={r.reputationEnd} />
         </div>
 
+        {r.revenue != null && (
+          <div className="panel mt-3 flex items-center gap-3 px-4 py-3">
+            <Coins size={18} className="shrink-0 text-gold-400" />
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Receita da temporada</p>
+              <p className="text-xs text-zinc-400">Patrocínio + premiação pela campanha entram no caixa.</p>
+            </div>
+            <span className="tnum text-lg font-bold text-gold-400">+{r.revenue}M</span>
+          </div>
+        )}
+
         {r.evolution.length > 0 && (
           <div className="panel mt-4 p-4">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
@@ -809,6 +879,296 @@ function OffersView() {
           abandonCareer()
         }}
       />
+    </div>
+  )
+}
+
+// ─── Mercado de transferências (Fase 2) ──────────────────────────────────────
+
+type MarketPlayer = CareerPlayer & { clubId: string; clubName: string; sellerStrength: number; starter: boolean }
+
+function MarketView({ onBack }: { onBack: () => void }) {
+  const career = useCareer((s) => s.career)
+  const buyPlayer = useCareer((s) => s.buyPlayer)
+  const sellPlayer = useCareer((s) => s.sellPlayer)
+  const closeWindow = useCareer((s) => s.closeWindow)
+  const setToast = useApp((s) => s.setToast)
+
+  const [tab, setTab] = useState<'buy' | 'sell'>('buy')
+  const [search, setSearch] = useState('')
+  const [posFilter, setPosFilter] = useState<'all' | 'GK' | 'DEF' | 'MID' | 'FWD'>('all')
+  const [negotiate, setNegotiate] = useState<MarketPlayer | null>(null)
+
+  const c = career!
+  const club = c.teams.find((t) => t.id === c.clubId)!
+  const teamsById = useMemo(() => Object.fromEntries(c.teams.map((t) => [t.id, t])), [c.teams])
+
+  // catálogo de todos os jogadores dos outros clubes
+  const market = useMemo<MarketPlayer[]>(() => {
+    const out: MarketPlayer[] = []
+    for (const [clubId, roster] of Object.entries(c.rostersByClub)) {
+      const starters = new Set([...roster].sort((a, b) => b.overall - a.overall).slice(0, 11).map((p) => p.id))
+      const name = teamsById[clubId]?.name ?? clubId
+      const sellerStrength = teamsById[clubId]?.strength ?? 60
+      for (const p of roster) out.push({ ...p, clubId, clubName: name, sellerStrength, starter: starters.has(p.id) })
+    }
+    return out.sort((a, b) => b.overall - a.overall)
+  }, [c.rostersByClub, teamsById])
+
+  const filtered = market.filter((p) => {
+    if (posFilter !== 'all' && p.position !== posFilter) return false
+    if (search && !p.name.toLowerCase().includes(search.toLowerCase()) && !p.clubName.toLowerCase().includes(search.toLowerCase())) return false
+    return true
+  })
+
+  const bill = wageBill(c.players)
+
+  const doBuy = (p: MarketPlayer, fee: number) => {
+    const res = buyPlayer(p.id, fee)
+    if (res.ok) {
+      setToast(`${p.name} contratado por ${fee}M`)
+      setNegotiate(null)
+    } else {
+      setToast(res.reason ?? 'Não rolou')
+    }
+  }
+
+  const doSell = (p: CareerPlayer) => {
+    const res = sellPlayer(p.id)
+    setToast(res.ok ? `${p.name} vendido por ${p.value}M` : res.reason ?? 'Não rolou')
+  }
+
+  return (
+    <div className="h-full overflow-y-auto">
+      <div className="mx-auto max-w-4xl px-4 py-8 md:px-8">
+        <button onClick={onBack} className="mb-4 flex items-center gap-2 text-sm text-zinc-500 transition-colors hover:text-zinc-200">
+          <ArrowLeft size={16} /> Voltar ao clube
+        </button>
+
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="kicker mb-1">
+              <span className="h-1.5 w-1.5 bg-blood-600" />
+              Mercado · janela {c.window === 'pre-season' ? 'de pré-temporada' : 'intermediária'}
+            </p>
+            <h1 className="display text-3xl text-zinc-100 md:text-4xl">Transferências</h1>
+          </div>
+          <div className="flex items-center gap-3 text-sm">
+            <span className="flex items-center gap-1.5">
+              <Coins size={15} className="text-gold-400" />
+              <span className="tnum font-bold text-zinc-100">{c.budget}M</span>
+              <span className="text-zinc-600">caixa</span>
+            </span>
+            <span className="tnum text-zinc-500">
+              folha <span className="font-bold text-zinc-300">{bill}</span>/{c.wageBudget}M
+            </span>
+          </div>
+        </div>
+
+        <div className="mb-4 inline-flex rounded-xl border border-white/5 bg-ink-900 p-1">
+          {(['buy', 'sell'] as const).map((tb) => (
+            <button
+              key={tb}
+              onClick={() => setTab(tb)}
+              className={cx(
+                'rounded-lg px-4 py-1.5 text-sm font-semibold transition',
+                tab === tb ? 'bg-blood-grad text-white shadow-glow-sm' : 'text-zinc-400 hover:text-zinc-100'
+              )}
+            >
+              {tb === 'buy' ? 'Contratar' : `Vender (${c.players.length})`}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'buy' ? (
+          <>
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <div className="relative min-w-[200px] flex-1">
+                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+                <input
+                  className="input py-1.5 pl-8 text-xs"
+                  placeholder="Buscar jogador ou clube…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+              {(['all', 'GK', 'DEF', 'MID', 'FWD'] as const).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setPosFilter(p)}
+                  className={cx(
+                    'rounded-lg px-2.5 py-1.5 text-xs font-bold transition',
+                    posFilter === p ? 'bg-blood-grad text-white' : 'bg-ink-800 text-zinc-400 hover:text-zinc-100'
+                  )}
+                >
+                  {p === 'all' ? 'Todos' : POS_LABEL[p]}
+                </button>
+              ))}
+            </div>
+            <div className="card divide-y divide-white/5 p-0">
+              {filtered.slice(0, 60).map((p) => (
+                <div key={p.id} className="flex items-center gap-2 px-3 py-2">
+                  <span className="w-8 shrink-0 text-[10px] font-bold uppercase text-zinc-600">{POS_LABEL[p.position]}</span>
+                  <TeamBadge team={teamsById[p.clubId]} size="xs" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm text-zinc-100">{p.name}</p>
+                    <p className="truncate text-[10px] text-zinc-600">{p.clubName} · {p.age} anos · contrato {p.contractYears}a</p>
+                  </div>
+                  <span className="tnum w-7 shrink-0 text-right text-sm font-bold text-zinc-100">{p.overall}</span>
+                  <span className="tnum w-14 shrink-0 text-right text-xs text-zinc-400">{p.value}M</span>
+                  <Button className="shrink-0 px-2.5 py-1 text-xs" onClick={() => setNegotiate(p)}>
+                    Negociar
+                  </Button>
+                </div>
+              ))}
+              {filtered.length === 0 && <p className="px-4 py-6 text-sm text-zinc-600">Nenhum jogador encontrado.</p>}
+            </div>
+          </>
+        ) : (
+          <div className="card divide-y divide-white/5 p-0">
+            {[...c.players]
+              .sort((a, b) => POS_ORDER[a.position] - POS_ORDER[b.position] || b.overall - a.overall)
+              .map((p) => (
+                <div key={p.id} className="flex items-center gap-2 px-3 py-2">
+                  <span className="w-8 shrink-0 text-[10px] font-bold uppercase text-zinc-600">{POS_LABEL[p.position]}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm text-zinc-100">{p.name}</p>
+                    <p className="truncate text-[10px] text-zinc-600">{p.age} anos · {p.salary}M/ano · contrato {p.contractYears}a</p>
+                  </div>
+                  <span className="tnum w-7 shrink-0 text-right text-sm font-bold text-zinc-100">{p.overall}</span>
+                  <Button className="shrink-0 px-2.5 py-1 text-xs" onClick={() => doSell(p)}>
+                    Vender {p.value}M
+                  </Button>
+                </div>
+              ))}
+          </div>
+        )}
+
+        {c.marketLog.length > 0 && (
+          <div className="panel mt-5 p-4">
+            <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              <ArrowRightLeft size={13} className="text-blood-400" /> Negócios recentes
+            </p>
+            {c.marketLog.slice(0, 8).map((m, i) => (
+              <div key={i} className="flex items-center gap-2 py-1 text-xs">
+                <span className="tnum w-10 shrink-0 text-zinc-600">Ano {m.year}</span>
+                <span className="min-w-0 flex-1 truncate text-zinc-300">{m.playerName}</span>
+                <span className="truncate text-[10px] text-zinc-600">{m.fromClubName} → {m.toClubName}</span>
+                <span className="tnum shrink-0 font-bold text-gold-400">{m.fee}M</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-6 flex justify-end">
+          <Button variant="primary" icon={<Check size={14} />} onClick={() => { closeWindow(); onBack() }}>
+            {c.window === 'pre-season' ? 'Fechar janela e começar' : 'Fechar janela e retomar'}
+          </Button>
+        </div>
+      </div>
+
+      <Modal open={!!negotiate} onClose={() => setNegotiate(null)} maxWidth="max-w-md">
+        {negotiate && (
+          <NegotiateModal
+            player={negotiate}
+            club={club}
+            budget={c.budget}
+            wageBill={bill}
+            wageBudget={c.wageBudget}
+            onSubmit={(fee) => doBuy(negotiate, fee)}
+          />
+        )}
+      </Modal>
+    </div>
+  )
+}
+
+function NegotiateModal({
+  player,
+  club,
+  budget,
+  wageBill: bill,
+  wageBudget,
+  onSubmit
+}: {
+  player: MarketPlayer
+  club: Team
+  budget: number
+  wageBill: number
+  wageBudget: number
+  onSubmit: (fee: number) => void
+}) {
+  const ask = askingPrice(player.value, player.starter, player.contractYears)
+  const [fee, setFee] = useState(ask)
+  const wageAfter = Math.round((bill + player.salary) * 10) / 10
+  const overCap = wageAfter > wageBudget
+  const overBudget = fee > budget
+  const TIER_RANK: Record<string, number> = { pequeno: 0, medio: 1, grande: 2, gigante: 3 }
+  const willRefuse = player.starter && TIER_RANK[clubTier(club.strength)] < TIER_RANK[clubTier(player.sellerStrength)]
+
+  return (
+    <div>
+      <div className="border-b border-white/5 px-5 py-4">
+        <h2 className="heading text-lg text-white">{player.name}</h2>
+        <p className="mt-0.5 text-xs text-zinc-500">
+          {POS_LABEL[player.position]} · {player.age} anos · OVR {player.overall} · {player.clubName}
+        </p>
+      </div>
+      <div className="space-y-3 p-5">
+        <div className="grid grid-cols-2 gap-2 text-center">
+          <div className="rounded-lg bg-ink-800/70 px-2 py-2">
+            <p className="text-[10px] uppercase tracking-wide text-zinc-600">Valor de mercado</p>
+            <p className="tnum text-base font-bold text-zinc-100">{player.value}M</p>
+          </div>
+          <div className="rounded-lg bg-ink-800/70 px-2 py-2">
+            <p className="text-[10px] uppercase tracking-wide text-zinc-600">Pedido do clube</p>
+            <p className="tnum text-base font-bold text-zinc-100">{ask}M</p>
+          </div>
+        </div>
+
+        <div>
+          <div className="mb-1 flex items-baseline justify-between text-xs">
+            <span className="text-zinc-500">Sua proposta</span>
+            <span className={cx('tnum font-bold', overBudget ? 'text-blood-400' : 'text-zinc-100')}>{fee}M</span>
+          </div>
+          <input
+            type="range"
+            min={1}
+            max={Math.max(ask * 2, budget)}
+            value={fee}
+            onChange={(e) => setFee(Number(e.target.value))}
+            className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-ink-700 accent-blood-500"
+          />
+        </div>
+
+        <div className="space-y-1 text-xs">
+          <div className="flex justify-between">
+            <span className="text-zinc-500">Caixa após a compra</span>
+            <span className={cx('tnum', overBudget ? 'text-blood-400' : 'text-zinc-300')}>{Math.round((budget - fee) * 10) / 10}M</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-zinc-500">Folha após o salário (+{player.salary}M)</span>
+            <span className={cx('tnum', overCap ? 'text-blood-400' : 'text-zinc-300')}>{wageAfter}/{wageBudget}M</span>
+          </div>
+        </div>
+
+        {overBudget && <p className="text-[11px] text-blood-400">Proposta acima do seu caixa.</p>}
+        {overCap && <p className="text-[11px] text-blood-400">Salário estoura o teto da folha.</p>}
+        {willRefuse && (
+          <p className="text-[11px] text-amber-400">
+            Titular do {player.clubName} (clube maior) — ele não quer descer de nível, nem por dinheiro (por ora). A proposta será recusada.
+          </p>
+        )}
+
+        <Button
+          variant="primary"
+          className="w-full justify-center"
+          disabled={overBudget || overCap || willRefuse}
+          onClick={() => onSubmit(fee)}
+        >
+          Fazer proposta
+        </Button>
+      </div>
     </div>
   )
 }

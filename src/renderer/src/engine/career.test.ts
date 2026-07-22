@@ -1,15 +1,22 @@
 import { describe, it, expect } from 'vitest'
 import {
   applyConfidence,
+  askingPrice,
   bestLineup,
   clubTier,
+  deriveClubStrength,
   evaluateYear,
   evolvePlayer,
   generateCareerRoster,
   generateObjective,
   generateOffers,
   isFired,
-  lineupSectors
+  lineupSectors,
+  negotiateFee,
+  playerSalary,
+  playerValue,
+  seasonRevenue,
+  wageBill
 } from './career'
 import type { Position, Team } from '../types'
 import type { CareerPlayer } from '../types-career'
@@ -30,7 +37,7 @@ const FULL_LAYOUT: Position[] = [
 ]
 
 function player(id: string, pos: Position, overall: number, age = 26, potential?: number): CareerPlayer {
-  return { id, name: id, position: pos, age, overall, potential: potential ?? overall }
+  return { id, name: id, position: pos, age, overall, potential: potential ?? overall, contractYears: 3, salary: 5, value: 20 }
 }
 
 describe('generateCareerRoster', () => {
@@ -194,5 +201,72 @@ describe('generateOffers', () => {
       const offers = generateOffers(league, 50, 'm1', 'seed' + i)
       expect(offers.every((o) => o.clubId !== 'm1')).toBe(true)
     }
+  })
+})
+
+// ─── Fase 2: finanças + mercado ──────────────────────────────────────────────
+
+describe('finanças (valuation, salário, receita)', () => {
+  it('valor e salário crescem com o OVR', () => {
+    expect(playerValue(90, 25, 90, 3)).toBeGreaterThan(playerValue(70, 25, 70, 3))
+    expect(playerSalary(90)).toBeGreaterThan(playerSalary(70))
+  })
+
+  it('jovem com potencial vale mais que veterano de mesmo OVR', () => {
+    const jovem = playerValue(80, 20, 90, 4)
+    const veterano = playerValue(80, 34, 80, 4)
+    expect(jovem).toBeGreaterThan(veterano)
+  })
+
+  it('contrato curto derruba o valor', () => {
+    expect(playerValue(80, 25, 80, 1)).toBeLessThan(playerValue(80, 25, 80, 4))
+  })
+
+  it('generateCareerRoster preenche campos financeiros', () => {
+    const roster = generateCareerRoster(team('x', 80), Array.from({ length: 16 }, (_, i) => ({ id: `x_p${i}`, name: `P${i}`, position: 'MID' as const })))
+    for (const p of roster) {
+      expect(p.contractYears).toBeGreaterThanOrEqual(1)
+      expect(p.salary).toBeGreaterThan(0)
+      expect(p.value).toBeGreaterThanOrEqual(1)
+    }
+    expect(wageBill(roster)).toBeGreaterThan(0)
+  })
+
+  it('receita: campeão de time grande fatura mais que lanterna', () => {
+    expect(seasonRevenue('grande', 1, 20, true)).toBeGreaterThan(seasonRevenue('grande', 20, 20, false))
+  })
+
+  it('evolução decrementa contrato e recalcula valor', () => {
+    const p = { ...player('e', 'FWD', 82, 24, 88), contractYears: 3 }
+    const after = evolvePlayer(p, 2)
+    expect(after.contractYears).toBe(2)
+    expect(after.value).not.toBe(p.value)
+  })
+})
+
+describe('negociação', () => {
+  it('titular custa mais que reserva; contrato curto barateia', () => {
+    expect(askingPrice(50, true, 3)).toBeGreaterThan(askingPrice(50, false, 3))
+    expect(askingPrice(50, true, 1)).toBeLessThan(askingPrice(50, true, 3))
+  })
+
+  it('aceita oferta >= pedido, contrapropõe perto, recusa baixa', () => {
+    const ask = askingPrice(50, false, 3) // buyer >= seller pra não bater na vontade própria
+    expect(negotiateFee(50, false, 3, 'medio', 'grande', ask).status).toBe('accepted')
+    expect(negotiateFee(50, false, 3, 'medio', 'grande', Math.round(ask * 0.9)).status).toBe('counter')
+    expect(negotiateFee(50, false, 3, 'medio', 'grande', Math.round(ask * 0.5)).status).toBe('refused')
+  })
+
+  it('vontade própria: titular de clube maior recusa clube menor', () => {
+    const r = negotiateFee(50, true, 3, 'gigante', 'pequeno', 9999)
+    expect(r.status).toBe('refused')
+  })
+})
+
+describe('deriveClubStrength', () => {
+  it('força do clube deriva do melhor XI do elenco', () => {
+    const strong = generateCareerRoster(team('a', 88), Array.from({ length: 18 }, (_, i) => ({ id: `a_p${i}`, name: `A${i}`, position: (['GK', 'DEF', 'DEF', 'DEF', 'DEF', 'MID', 'MID', 'MID', 'FWD', 'FWD', 'FWD'] as const)[i % 11] })))
+    const weak = generateCareerRoster(team('b', 55), Array.from({ length: 18 }, (_, i) => ({ id: `b_p${i}`, name: `B${i}`, position: (['GK', 'DEF', 'DEF', 'DEF', 'DEF', 'MID', 'MID', 'MID', 'FWD', 'FWD', 'FWD'] as const)[i % 11] })))
+    expect(deriveClubStrength(strong).strength).toBeGreaterThan(deriveClubStrength(weak).strength)
   })
 })
