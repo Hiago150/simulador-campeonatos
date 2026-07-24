@@ -14,8 +14,10 @@ export interface CareerPlayer {
   potential: number // >= overall enquanto jovem; converge com a idade
   // ── financeiro (Fase 2) ──
   contractYears: number // anos restantes de contrato
-  salary: number // M/ano (fixo até renovar — renovação é F3)
+  salary: number // M/ano (fixo até renovar)
   value: number // valor de mercado (M) — recalculado a cada virada de ano
+  // ── moral (Fase 3) ── 0-100; move por tempo de jogo + resultados
+  morale: number
 }
 
 /** formações da Fase 1 — GK é sempre 1; linhas somam 10 */
@@ -106,6 +108,44 @@ export interface TransferRecord {
   toClubId: string
   toClubName: string
   fee: number // M
+  /** negócio entre clubes da IA (não envolveu o usuário) — Fase 3 */
+  ai?: boolean
+}
+
+// ── Eventos (Fase 3) — derivados do estado, nunca roteiro fixo ──────────────
+
+export type CareerEventKind =
+  | 'rival-bid' // clube rival quer um titular seu
+  | 'bench-unhappy' // reserva insatisfeito com pouco tempo de jogo
+  | 'contract-expiring' // titular com contrato acabando (risco Bosman)
+  | 'board-sell-demand' // diretoria cobra venda pra equilibrar o caixa
+
+export interface CareerEventOption {
+  id: string
+  label: string
+  /** o que acontece, em PT-BR, pro usuário decidir informado */
+  detail: string
+}
+
+export interface CareerEvent {
+  id: string
+  kind: CareerEventKind
+  year: number
+  title: string
+  text: string
+  /** jogador no centro do evento (quando houver) */
+  playerId?: string
+  playerName?: string
+  /** clube envolvido (ex.: quem fez a oferta) */
+  clubId?: string
+  clubName?: string
+  /** valor em jogo (M) — oferta, custo de renovação etc. */
+  amount?: number
+  options: CareerEventOption[]
+  /** resposta já dada (resolvido) — mantém no histórico */
+  resolvedOptionId?: string
+  /** resumo do desfecho, preenchido ao resolver */
+  outcome?: string
 }
 
 export interface Career {
@@ -131,8 +171,13 @@ export interface Career {
   window: TransferWindow | null
   /** a janela intermediária já abriu neste ano? (abre 1× no meio das rodadas) */
   midSeasonOpened: boolean
-  /** histórico de transferências (feedback/extrato) */
+  /** histórico de transferências (feedback/extrato) — inclui negócios da IA */
   marketLog: TransferRecord[]
+  // ── eventos (Fase 3) ──
+  /** caixa de entrada: pendentes primeiro, resolvidos ficam como histórico */
+  events: CareerEvent[]
+  /** jogadores que saíram de graça por fim de contrato (Bosman) no último turnover */
+  lastFreeAgents?: { playerId: string; name: string; overall: number }[]
   /** 1-100 — atravessa clubes, é do TÉCNICO */
   reputation: number
   /** 0-100 — é do vínculo com o clube atual */

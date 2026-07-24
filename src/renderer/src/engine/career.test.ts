@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
+  aiTransfers,
   applyConfidence,
+  applyRoundMorale,
   askingPrice,
   bestLineup,
   clubTier,
@@ -8,6 +10,7 @@ import {
   evaluateYear,
   evolvePlayer,
   generateCareerRoster,
+  generateEvents,
   generateObjective,
   generateOffers,
   isFired,
@@ -15,8 +18,12 @@ import {
   negotiateFee,
   playerSalary,
   playerValue,
+  renewPlayer,
+  renewalCost,
   seasonRevenue,
-  wageBill
+  turnoverRoster,
+  wageBill,
+  willRenew
 } from './career'
 import type { Position, Team } from '../types'
 import type { CareerPlayer } from '../types-career'
@@ -37,7 +44,7 @@ const FULL_LAYOUT: Position[] = [
 ]
 
 function player(id: string, pos: Position, overall: number, age = 26, potential?: number): CareerPlayer {
-  return { id, name: id, position: pos, age, overall, potential: potential ?? overall, contractYears: 3, salary: 5, value: 20 }
+  return { id, name: id, position: pos, age, overall, potential: potential ?? overall, contractYears: 3, salary: 5, value: 20, morale: 65 }
 }
 
 describe('generateCareerRoster', () => {
@@ -260,6 +267,161 @@ describe('negociação', () => {
   it('vontade própria: titular de clube maior recusa clube menor', () => {
     const r = negotiateFee(50, true, 3, 'gigante', 'pequeno', 9999)
     expect(r.status).toBe('refused')
+  })
+})
+
+// ─── Fase 3: moral, contratos (Bosman), eventos, mercado da IA ───────────────
+
+describe('moral', () => {
+  it('titular sobe, banco desce; vitória e derrota empurram todo mundo', () => {
+    const squad = [player('a', 'FWD', 80), player('b', 'MID', 75)]
+    const win = applyRoundMorale(squad, ['a'], 'win')
+    expect(win[0].morale).toBe(70) // 65 +2 titular +3 vitória
+    expect(win[1].morale).toBe(66) // 65 -2 banco +3 vitória
+    const loss = applyRoundMorale(squad, ['a'], 'loss')
+    expect(loss[0].morale).toBe(64) // +2 -3
+    expect(loss[1].morale).toBe(60) // -2 -3
+  })
+
+  it('moral não sai de 0-100', () => {
+    const low = applyRoundMorale([{ ...player('x', 'DEF', 70), morale: 1 }], [], 'loss')
+    expect(low[0].morale).toBe(0)
+    const high = applyRoundMorale([{ ...player('y', 'DEF', 70), morale: 99 }], ['y'], 'win')
+    expect(high[0].morale).toBe(100)
+  })
+})
+
+describe('contrato (Bosman)', () => {
+  it('contrato vence de verdade — chega a 0 e não auto-renova', () => {
+    let p = { ...player('c', 'MID', 80, 26), contractYears: 2 }
+    p = evolvePlayer(p, 1)
+    expect(p.contractYears).toBe(1)
+    p = evolvePlayer(p, 2)
+    expect(p.contractYears).toBe(0)
+  })
+
+  it('renovar cedo é mais barato que na iminência', () => {
+    const cedo = renewalCost({ ...player('r', 'MID', 80), contractYears: 4 })
+    const tarde = renewalCost({ ...player('r', 'MID', 80), contractYears: 1 })
+    expect(cedo).toBeLessThan(tarde)
+  })
+
+  it('moral baixa faz o jogador recusar renovação', () => {
+    expect(willRenew({ ...player('w', 'FWD', 80), morale: 60 })).toBe(true)
+    expect(willRenew({ ...player('w', 'FWD', 80), morale: 10 })).toBe(false)
+  })
+
+  it('renovação dá 3 anos e reajusta salário', () => {
+    const p = renewPlayer({ ...player('n', 'FWD', 80), contractYears: 1, salary: 10 })
+    expect(p.contractYears).toBe(3)
+    expect(p.salary).toBeGreaterThan(10)
+  })
+})
+
+describe('turnoverRoster (Bosman + reposição)', () => {
+  const squadOf16 = () =>
+    Array.from({ length: 16 }, (_, i) => ({
+      ...player(`p${i}`, 'MID', 75, 26),
+      contractYears: i < 2 ? 1 : 4 // dois vencem neste ano
+    }))
+
+  it('quem chega a 0 de contrato SAI do elenco', () => {
+    const { kept, left } = turnoverRoster(squadOf16(), 1, 16, () => [])
+    expect(left.map((p) => p.id).sort()).toEqual(['p0', 'p1'])
+    expect(kept.some((p) => p.id === 'p0' || p.id === 'p1')).toBe(false)
+  })
+
+  it('REGRESSÃO: a reposição não pode ressuscitar quem acabou de sair', () => {
+    // fillers "preguiçosos" que devolvem o próprio elenco canônico (o bug real)
+    const lazyFillers = (need: number) => squadOf16().slice(0, need)
+    const { kept, left } = turnoverRoster(squadOf16(), 1, 16, lazyFillers)
+    for (const gone of left) {
+      expect(kept.some((p) => p.id === gone.id)).toBe(false)
+    }
+  })
+
+  it('repõe até o mínimo com jogadores inéditos', () => {
+    const fresh = (need: number) =>
+      Array.from({ length: need }, (_, i) => player(`novo-y1-${i}`, 'DEF', 70, 20))
+    const { kept } = turnoverRoster(squadOf16(), 1, 16, fresh)
+    expect(kept).toHaveLength(16)
+    expect(kept.filter((p) => p.id.startsWith('novo-')).length).toBe(2)
+  })
+})
+
+describe('generateEvents', () => {
+  const teams = [team('meu', 75), team('rico', 90), team('pobre', 50)]
+  const baseCtx = (over: Partial<Parameters<typeof generateEvents>[0]> = {}) => ({
+    year: 1,
+    players: [player('s1', 'FWD', 84, 26), player('b1', 'MID', 70, 24)],
+    starterIds: ['s1'],
+    teams,
+    clubId: 'meu',
+    rostersByClub: {},
+    budget: 50,
+    wageBill: 10,
+    wageBudget: 100,
+    existingIds: new Set<string>(),
+    ...over
+  })
+
+  it('rival faz proposta por titular de contrato curto', () => {
+    const evs = generateEvents(baseCtx({ players: [{ ...player('s1', 'FWD', 84), contractYears: 1 }], starterIds: ['s1'] }))
+    const bid = evs.find((e) => e.kind === 'rival-bid')
+    expect(bid).toBeTruthy()
+    expect(bid!.amount).toBeGreaterThan(0)
+    expect(bid!.options).toHaveLength(2)
+  })
+
+  it('reserva com moral baixa vira evento', () => {
+    const evs = generateEvents(baseCtx({ players: [player('s1', 'FWD', 84), { ...player('b1', 'MID', 70), morale: 20 }] }))
+    expect(evs.some((e) => e.kind === 'bench-unhappy')).toBe(true)
+  })
+
+  it('contrato vencendo de titular vira evento com custo', () => {
+    const evs = generateEvents(baseCtx({ players: [{ ...player('s1', 'FWD', 84), contractYears: 1 }], starterIds: ['s1'] }))
+    const ct = evs.find((e) => e.kind === 'contract-expiring')
+    expect(ct).toBeTruthy()
+    expect(ct!.amount).toBeGreaterThan(0)
+  })
+
+  it('diretoria cobra caixa quando aperta', () => {
+    const evs = generateEvents(baseCtx({ budget: 2, wageBill: 95, wageBudget: 100 }))
+    expect(evs.some((e) => e.kind === 'board-sell-demand')).toBe(true)
+  })
+
+  it('não repete evento já existente', () => {
+    const ctx = baseCtx({ players: [{ ...player('s1', 'FWD', 84), contractYears: 1 }], starterIds: ['s1'] })
+    const first = generateEvents(ctx)
+    const again = generateEvents({ ...ctx, existingIds: new Set(first.map((e) => e.id)) })
+    expect(again).toHaveLength(0)
+  })
+})
+
+describe('aiTransfers', () => {
+  it('move jogadores entre clubes da IA sem tocar no clube do usuário', () => {
+    const teams = [team('meu', 75), team('a', 80), team('b', 78), team('c', 76)]
+    const roster = (id: string) =>
+      generateCareerRoster(team(id, 78), Array.from({ length: 18 }, (_, i) => ({ id: `${id}_p${i}`, name: `${id}${i}`, position: 'MID' as const })))
+    const rosters = { a: roster('a'), b: roster('b'), c: roster('c') }
+    const before = Object.fromEntries(Object.entries(rosters).map(([k, v]) => [k, v.length]))
+    const res = aiTransfers(teams, rosters, 'meu', 'seed1', 14)
+    expect(res.moves.length).toBeGreaterThan(0)
+    // total de jogadores se conserva entre os clubes da IA
+    const afterTotal = Object.values(res.rostersByClub).reduce((s, r) => s + r.length, 0)
+    const beforeTotal = Object.values(before).reduce((s, n) => s + n, 0)
+    expect(afterTotal).toBe(beforeTotal)
+    expect(res.rostersByClub['meu']).toBeUndefined()
+  })
+
+  it('é determinístico pelo seed', () => {
+    const teams = [team('meu', 75), team('a', 80), team('b', 78)]
+    const roster = (id: string) =>
+      generateCareerRoster(team(id, 78), Array.from({ length: 18 }, (_, i) => ({ id: `${id}_p${i}`, name: `${id}${i}`, position: 'MID' as const })))
+    const mk = () => ({ a: roster('a'), b: roster('b') })
+    const r1 = aiTransfers(teams, mk(), 'meu', 'same', 14)
+    const r2 = aiTransfers(teams, mk(), 'meu', 'same', 14)
+    expect(r1.moves.map((m) => m.player.id)).toEqual(r2.moves.map((m) => m.player.id))
   })
 })
 

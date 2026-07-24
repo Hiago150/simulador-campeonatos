@@ -6,18 +6,21 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowRightLeft,
+  Bell,
   Briefcase,
   Check,
   ChevronRight,
   Coins,
   Crown,
   FastForward,
+  FileSignature,
   Flag,
   Play,
   RotateCcw,
   Search,
   Shield,
   ShoppingCart,
+  Smile,
   TrendingDown,
   TrendingUp,
   Trophy,
@@ -39,6 +42,8 @@ import {
   askingPrice,
   clubTier,
   lineupSectors,
+  moraleLabel,
+  renewalCost,
   wageBill
 } from '../engine/career'
 import { Button, Modal } from '../components/ui'
@@ -233,6 +238,7 @@ function CareerHub() {
   const [showSquad, setShowSquad] = useState(false)
   const [confirmAbandon, setConfirmAbandon] = useState(false)
   const [showMarket, setShowMarket] = useState(false)
+  const [showEvents, setShowEvents] = useState(false)
 
   const c = career!
   const windowOpen = !!c.window
@@ -261,6 +267,7 @@ function CareerHub() {
     .sort((a, b) => POS_ORDER[a.position] - POS_ORDER[b.position] || b.overall - a.overall)
 
   const tier = clubTier(club.strength)
+  const pendingEvents = c.events.filter((e) => !e.resolvedOptionId)
 
   // early-return DEPOIS de todos os hooks (ordem de hooks estável)
   if (showMarket && windowOpen) return <MarketView onBack={() => setShowMarket(false)} />
@@ -339,6 +346,49 @@ function CareerHub() {
             </div>
           </div>
         </div>
+
+        {/* Caixa de entrada de eventos (Fase 3) */}
+        {c.events.length > 0 && (
+          <button
+            onClick={() => setShowEvents(true)}
+            className={cx(
+              'mb-5 flex w-full items-center gap-3 rounded-xl border p-4 text-left transition',
+              pendingEvents.length > 0
+                ? 'animate-fade-up border-amber-600/40 bg-amber-950/20 hover:border-amber-500/60'
+                : 'border-white/5 bg-ink-800/40 hover:border-white/15'
+            )}
+          >
+            <Bell size={18} className={cx('shrink-0', pendingEvents.length > 0 ? 'text-amber-400' : 'text-zinc-500')} />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-zinc-100">
+                {pendingEvents.length > 0
+                  ? `${pendingEvents.length} decisão${pendingEvents.length === 1 ? '' : 'ões'} esperando você`
+                  : 'Nenhuma decisão pendente'}
+              </p>
+              <p className="truncate text-xs text-zinc-500">
+                {pendingEvents.length > 0 ? pendingEvents[0].title : 'Ver o histórico de decisões da carreira'}
+              </p>
+            </div>
+            {pendingEvents.length > 0 && (
+              <span className="tnum shrink-0 rounded-full bg-amber-500 px-2 py-0.5 text-xs font-bold text-ink-950">
+                {pendingEvents.length}
+              </span>
+            )}
+            <ChevronRight size={16} className="shrink-0 text-zinc-600" />
+          </button>
+        )}
+
+        {/* Saídas por fim de contrato (Bosman) no último turnover */}
+        {c.lastFreeAgents && c.lastFreeAgents.length > 0 && (
+          <div className="mb-5 rounded-xl border border-blood-700/40 bg-blood-950/20 p-4">
+            <p className="mb-1 flex items-center gap-2 text-sm font-bold text-zinc-100">
+              <FileSignature size={15} className="text-blood-400" /> Saíram de graça (contrato vencido)
+            </p>
+            <p className="text-xs text-zinc-400">
+              {c.lastFreeAgents.map((f) => `${f.name} (${f.overall})`).join(' · ')}
+            </p>
+          </div>
+        )}
 
         {/* Janela de transferências aberta */}
         {windowOpen && (
@@ -455,6 +505,12 @@ function CareerHub() {
                       {POS_LABEL[slotPosition(c.lineup.formation, i)]}
                     </span>
                     <span className="min-w-0 flex-1 truncate text-sm text-zinc-200">{p.name}</span>
+                    <MoraleDot morale={p.morale} />
+                    {p.contractYears <= 1 && (
+                      <span className="shrink-0 rounded bg-blood-950/60 px-1 text-[9px] font-bold text-blood-300" title="Contrato acabando">
+                        {p.contractYears}a
+                      </span>
+                    )}
                     <span className="shrink-0 text-[10px] text-zinc-600">{p.age} anos</span>
                     <span className="tnum w-7 shrink-0 text-right text-sm font-bold text-zinc-100">{p.overall}</span>
                     <ChevronRight size={13} className="shrink-0 text-zinc-700" />
@@ -478,6 +534,7 @@ function CareerHub() {
                         <span className={cx('min-w-0 flex-1 truncate', c.lineup.starterIds.includes(p.id) ? 'text-zinc-200' : 'text-zinc-500')}>
                           {p.name}
                         </span>
+                        <MoraleDot morale={p.morale} />
                         <span className="shrink-0 text-[10px] text-zinc-600">{p.age}a</span>
                         <span className="tnum w-6 shrink-0 text-right font-bold text-zinc-300">{p.overall}</span>
                         <span className="tnum w-8 shrink-0 text-right text-[10px] text-zinc-600">pot {p.potential}</span>
@@ -530,6 +587,10 @@ function CareerHub() {
         onClose={() => setSelectedMatchId(null)}
       />
 
+      <Modal open={showEvents} onClose={() => setShowEvents(false)} maxWidth="max-w-lg">
+        <EventsModal />
+      </Modal>
+
       <ConfirmDialog
         open={confirmAbandon}
         title="Abandonar a carreira?"
@@ -541,6 +602,80 @@ function CareerHub() {
           abandonCareer()
         }}
       />
+    </div>
+  )
+}
+
+/** bolinha de moral com tooltip — verde feliz, âmbar neutro, vermelho querendo sair */
+function MoraleDot({ morale }: { morale: number }) {
+  const color = morale >= 60 ? 'bg-win-400' : morale >= 40 ? 'bg-amber-400' : 'bg-blood-500'
+  return (
+    <span
+      title={`Moral: ${moraleLabel(morale)} (${morale})`}
+      className={cx('h-2 w-2 shrink-0 rounded-full', color)}
+    />
+  )
+}
+
+// ─── Caixa de eventos (Fase 3) ───────────────────────────────────────────────
+
+function EventsModal() {
+  const career = useCareer((s) => s.career)
+  const resolveEvent = useCareer((s) => s.resolveEvent)
+  const setToast = useApp((s) => s.setToast)
+  const c = career!
+  const pending = c.events.filter((e) => !e.resolvedOptionId)
+  const done = c.events.filter((e) => e.resolvedOptionId).slice(0, 8)
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 border-b border-white/5 px-5 py-4">
+        <Bell size={18} className="text-amber-400" />
+        <h2 className="heading text-lg text-white">Decisões</h2>
+        {pending.length > 0 && (
+          <span className="tnum rounded-full bg-amber-500 px-2 py-0.5 text-xs font-bold text-ink-950">{pending.length}</span>
+        )}
+      </div>
+      <div className="max-h-[65vh] space-y-3 overflow-y-auto p-4">
+        {pending.length === 0 && done.length === 0 && (
+          <p className="py-6 text-center text-sm text-zinc-600">Nada acontecendo por enquanto.</p>
+        )}
+
+        {pending.map((e) => (
+          <div key={e.id} className="rounded-xl border border-amber-600/30 bg-amber-950/10 p-4">
+            <p className="text-sm font-bold text-zinc-100">{e.title}</p>
+            <p className="mt-1 text-xs leading-relaxed text-zinc-400">{e.text}</p>
+            <div className="mt-3 flex flex-col gap-2">
+              {e.options.map((o) => (
+                <button
+                  key={o.id}
+                  onClick={() => {
+                    resolveEvent(e.id, o.id)
+                    const after = useCareer.getState().career?.events.find((x) => x.id === e.id)
+                    if (after?.outcome) setToast(after.outcome)
+                  }}
+                  className="rounded-lg border border-white/10 bg-ink-800/60 px-3 py-2 text-left transition hover:border-blood-600/50 hover:bg-ink-800"
+                >
+                  <p className="text-xs font-bold text-zinc-100">{o.label}</p>
+                  <p className="text-[11px] text-zinc-500">{o.detail}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        {done.length > 0 && (
+          <div className="pt-2">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-600">Já decididas</p>
+            {done.map((e) => (
+              <div key={e.id} className="mb-1.5 rounded-lg bg-ink-800/40 px-3 py-2">
+                <p className="text-xs font-semibold text-zinc-300">{e.title}</p>
+                {e.outcome && <p className="text-[11px] text-zinc-500">{e.outcome}</p>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -891,6 +1026,7 @@ function MarketView({ onBack }: { onBack: () => void }) {
   const career = useCareer((s) => s.career)
   const buyPlayer = useCareer((s) => s.buyPlayer)
   const sellPlayer = useCareer((s) => s.sellPlayer)
+  const renewContract = useCareer((s) => s.renewContract)
   const closeWindow = useCareer((s) => s.closeWindow)
   const setToast = useApp((s) => s.setToast)
 
@@ -1032,10 +1168,29 @@ function MarketView({ onBack }: { onBack: () => void }) {
                 <div key={p.id} className="flex items-center gap-2 px-3 py-2">
                   <span className="w-8 shrink-0 text-[10px] font-bold uppercase text-zinc-600">{POS_LABEL[p.position]}</span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm text-zinc-100">{p.name}</p>
-                    <p className="truncate text-[10px] text-zinc-600">{p.age} anos · {p.salary}M/ano · contrato {p.contractYears}a</p>
+                    <p className="flex items-center gap-1.5 truncate text-sm text-zinc-100">
+                      {p.name}
+                      <MoraleDot morale={p.morale} />
+                    </p>
+                    <p className="truncate text-[10px] text-zinc-600">
+                      {p.age} anos · {p.salary}M/ano ·{' '}
+                      <span className={p.contractYears <= 1 ? 'font-bold text-blood-300' : ''}>
+                        contrato {p.contractYears}a
+                      </span>
+                    </p>
                   </div>
                   <span className="tnum w-7 shrink-0 text-right text-sm font-bold text-zinc-100">{p.overall}</span>
+                  {p.contractYears <= 2 && (
+                    <Button
+                      className="shrink-0 px-2.5 py-1 text-xs"
+                      onClick={() => {
+                        const res = renewContract(p.id)
+                        setToast(res.ok ? `${p.name} renovou por 3 anos` : res.reason ?? 'Não rolou')
+                      }}
+                    >
+                      Renovar {renewalCost(p)}M
+                    </Button>
+                  )}
                   <Button className="shrink-0 px-2.5 py-1 text-xs" onClick={() => doSell(p)}>
                     Vender {p.value}M
                   </Button>

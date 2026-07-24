@@ -8,6 +8,7 @@
 import type { Position, Team } from '../types'
 import type {
   BoardObjective,
+  CareerEvent,
   CareerLineup,
   CareerPlayer,
   ClubTier,
@@ -34,13 +35,15 @@ export function playerValue(overall: number, age: number, potential: number, con
   return Math.max(1, Math.round(base * ageFactor * potFactor * contractFactor))
 }
 
-/** preenche os campos financeiros de um jogador (contrato seeded 1-4 anos) */
-export function withFinance(p: Omit<CareerPlayer, 'contractYears' | 'salary' | 'value'>): CareerPlayer {
+/** preenche os campos financeiros + moral de um jogador (contrato seeded 1-4 anos) */
+export function withFinance(
+  p: Omit<CareerPlayer, 'contractYears' | 'salary' | 'value' | 'morale'>
+): CareerPlayer {
   const rnd = mulberry32(hashString(p.id + 'contract'))
   const contractYears = 1 + Math.floor(rnd() * 4) // 1-4
   const salary = playerSalary(p.overall)
   const value = playerValue(p.overall, p.age, p.potential, contractYears)
-  return { ...p, contractYears, salary, value }
+  return { ...p, contractYears, salary, value, morale: 60 + Math.round(rnd() * 20) } // 60-80
 }
 
 // ─── Formações: quantos por linha (GK é sempre 1) ────────────────────────────
@@ -325,12 +328,256 @@ export function evolvePlayer(p: CareerPlayer, year: number): CareerPlayer {
   const cap = age <= 29 ? p.potential : 99
   const overall = clamp(Math.min(p.overall + delta, cap), 40, 99)
   const potential = age >= 28 ? overall : Math.max(p.potential, overall)
-  // contrato corre 1 ano; ao vencer, o clube retém (renovação MANUAL é F3 —
-  // aqui auto-renova pra 3 anos pra não criar agente livre antes da hora)
-  const contractYears = p.contractYears <= 1 ? 3 : p.contractYears - 1
+  // contrato corre 1 ano e VENCE de verdade (Bosman, decidido R5): ao chegar
+  // a 0 o jogador sai de graça no turnover — quem quiser segurar, renova antes.
+  const contractYears = Math.max(0, p.contractYears - 1)
   // salário fixo pelo contrato; valor de mercado acompanha idade/OVR/contrato
   const value = playerValue(overall, age, potential, contractYears)
   return { ...p, age, overall, potential, contractYears, value }
+}
+
+// ─── Moral (Fase 3: tempo de jogo + resultados) ──────────────────────────────
+
+/** move a moral do elenco após uma rodada: titular sobe, banco desce; o
+ *  resultado do time empurra todo mundo junto. */
+export function applyRoundMorale(
+  players: CareerPlayer[],
+  starterIds: string[],
+  result: 'win' | 'draw' | 'loss'
+): CareerPlayer[] {
+  const resultDelta = result === 'win' ? 3 : result === 'loss' ? -3 : 0
+  const starters = new Set(starterIds)
+  return players.map((p) => {
+    const playDelta = starters.has(p.id) ? 2 : -2
+    return { ...p, morale: clamp(Math.round(p.morale + playDelta + resultDelta), 0, 100) }
+  })
+}
+
+export function moraleLabel(morale: number): string {
+  if (morale >= 80) return 'Muito feliz'
+  if (morale >= 60) return 'Contente'
+  if (morale >= 40) return 'Neutro'
+  if (morale >= 20) return 'Incomodado'
+  return 'Quer sair'
+}
+
+// ─── Renovação de contrato (Bosman) ──────────────────────────────────────────
+
+/** custo de renovar (M): mais barato cedo, caro na iminência do vencimento */
+export function renewalCost(p: CareerPlayer): number {
+  const urgency = p.contractYears <= 0 ? 1.6 : p.contractYears === 1 ? 1.3 : p.contractYears === 2 ? 1.0 : 0.75
+  return Math.max(1, Math.round(p.salary * 2 * urgency))
+}
+
+/** o jogador topa renovar? moral baixa faz recusar (a saída vira o plano dele) */
+export function willRenew(p: CareerPlayer): boolean {
+  return p.morale >= 30
+}
+
+/** aplica a renovação: +3 anos de contrato e um leve reajuste salarial */
+export function renewPlayer(p: CareerPlayer): CareerPlayer {
+  const salary = Math.round(p.salary * 1.1 * 10) / 10
+  const contractYears = 3
+  return { ...p, salary, contractYears, value: playerValue(p.overall, p.age, p.potential, contractYears) }
+}
+
+// ─── Virada de ano de um elenco (Fase 3: evolui, Bosman, repõe) ──────────────
+
+export interface RosterTurnover {
+  kept: CareerPlayer[]
+  /** saíram de graça por fim de contrato */
+  left: CareerPlayer[]
+}
+
+/**
+ * Evolui um elenco, deixa sair quem teve o contrato vencido (Bosman) e repõe
+ * até o mínimo com jogadores NOVOS.
+ *
+ * `makeFillers` precisa devolver caras inéditos: reaproveitar o elenco canônico
+ * do clube ressuscitaria justamente quem acabou de perder o contrato — foi um
+ * bug real, por isso os ids de reposição levam o ano.
+ */
+export function turnoverRoster(
+  roster: CareerPlayer[],
+  year: number,
+  minSquad: number,
+  makeFillers: (need: number) => CareerPlayer[]
+): RosterTurnover {
+  const evolved = roster.map((p) => evolvePlayer(p, year))
+  const left = evolved.filter((p) => p.contractYears <= 0)
+  const kept = evolved.filter((p) => p.contractYears > 0)
+  if (kept.length >= minSquad) return { kept, left }
+  const gone = new Set([...left.map((p) => p.id), ...kept.map((p) => p.id)])
+  const fillers = makeFillers(minSquad - kept.length).filter((p) => !gone.has(p.id))
+  return { kept: [...kept, ...fillers], left }
+}
+
+// ─── Mercado da IA (Fase 3: o mundo se move sozinho) ─────────────────────────
+
+/**
+ * Alguns negócios entre clubes da IA por janela. Sem orçamento de IA modelado
+ * (provisório): o filtro é porte + vontade própria + elenco mínimo.
+ */
+export function aiTransfers(
+  teams: Team[],
+  rostersByClub: Record<string, CareerPlayer[]>,
+  userClubId: string,
+  seed: string,
+  minSquad: number
+): { rostersByClub: Record<string, CareerPlayer[]>; moves: { player: CareerPlayer; fromId: string; toId: string; fee: number }[] } {
+  const rnd = mulberry32(hashString(seed + 'ai-market'))
+  const next: Record<string, CareerPlayer[]> = Object.fromEntries(
+    Object.entries(rostersByClub).map(([k, v]) => [k, [...v]])
+  )
+  const moves: { player: CareerPlayer; fromId: string; toId: string; fee: number }[] = []
+  const aiIds = teams.map((t) => t.id).filter((id) => id !== userClubId && next[id])
+  const strengthOf = (id: string) => teams.find((t) => t.id === id)?.strength ?? 60
+  const count = 2 + Math.floor(rnd() * 3) // 2-4 negócios
+
+  for (let i = 0; i < count && aiIds.length >= 2; i++) {
+    const fromId = aiIds[Math.floor(rnd() * aiIds.length)]
+    const toId = aiIds[Math.floor(rnd() * aiIds.length)]
+    if (fromId === toId) continue
+    const fromRoster = next[fromId]
+    if (!fromRoster || fromRoster.length <= minSquad) continue
+    const player = fromRoster[Math.floor(rnd() * fromRoster.length)]
+    if (!player) continue
+    // vontade própria: não desce de porte sendo titular
+    const starters = new Set([...fromRoster].sort((a, b) => b.overall - a.overall).slice(0, 11).map((p) => p.id))
+    const isStarter = starters.has(player.id)
+    if (isStarter && clubTier(strengthOf(toId)) < clubTier(strengthOf(fromId))) continue
+    next[fromId] = fromRoster.filter((p) => p.id !== player.id)
+    next[toId] = [...next[toId], player]
+    moves.push({ player, fromId, toId, fee: askingPrice(player.value, isStarter, player.contractYears) })
+  }
+  return { rostersByClub: next, moves }
+}
+
+// ─── Eventos derivados do estado (Fase 3) ────────────────────────────────────
+
+export interface EventContext {
+  year: number
+  players: CareerPlayer[]
+  starterIds: string[]
+  teams: Team[]
+  clubId: string
+  rostersByClub: Record<string, CareerPlayer[]>
+  budget: number
+  wageBill: number
+  wageBudget: number
+  /** ids de eventos que já existem (pendentes ou resolvidos) — não repete */
+  existingIds: Set<string>
+}
+
+/**
+ * Gera eventos a partir do estado REAL (nada de roteiro fixo): oferta de rival
+ * por titular com contrato curto, reserva insatisfeito, contrato vencendo e
+ * cobrança da diretoria por caixa apertado. Ids determinísticos evitam
+ * duplicar o mesmo evento no mesmo ano.
+ */
+export function generateEvents(ctx: EventContext): CareerEvent[] {
+  const out: CareerEvent[] = []
+  const starters = new Set(ctx.starterIds)
+  const club = ctx.teams.find((t) => t.id === ctx.clubId)
+  const push = (e: CareerEvent) => {
+    if (!ctx.existingIds.has(e.id)) out.push(e)
+  }
+
+  // 1) rival quer um titular seu de contrato curto
+  const wanted = ctx.players
+    .filter((p) => starters.has(p.id) && p.contractYears <= 2)
+    .sort((a, b) => b.overall - a.overall)[0]
+  if (wanted && club) {
+    const rival = ctx.teams
+      .filter((t) => t.id !== ctx.clubId && clubTier(t.strength) >= clubTier(club.strength))
+      .sort((a, b) => b.strength - a.strength)[0]
+    if (rival) {
+      const offer = Math.round(wanted.value * 1.3)
+      push({
+        id: `bid-${ctx.year}-${wanted.id}`,
+        kind: 'rival-bid',
+        year: ctx.year,
+        title: `${rival.name} quer ${wanted.name}`,
+        text: `O ${rival.name} colocou ${offer}M na mesa por ${wanted.name} (OVR ${wanted.overall}), que tem só ${wanted.contractYears} ano(s) de contrato. Vender agora garante o dinheiro; segurar arrisca perdê-lo mais barato depois.`,
+        playerId: wanted.id,
+        playerName: wanted.name,
+        clubId: rival.id,
+        clubName: rival.name,
+        amount: offer,
+        options: [
+          { id: 'accept', label: `Vender por ${offer}M`, detail: 'Entra no caixa; você perde um titular e o elenco sente.' },
+          { id: 'refuse', label: 'Recusar a proposta', detail: 'Segura o jogador, mas ele fica incomodado com a negativa.' }
+        ]
+      })
+    }
+  }
+
+  // 2) reserva insatisfeito (moral baixa e fora do XI)
+  const unhappy = ctx.players
+    .filter((p) => !starters.has(p.id) && p.morale < 40)
+    .sort((a, b) => a.morale - b.morale)[0]
+  if (unhappy) {
+    push({
+      id: `bench-${ctx.year}-${unhappy.id}`,
+      kind: 'bench-unhappy',
+      year: ctx.year,
+      title: `${unhappy.name} quer jogar`,
+      text: `${unhappy.name} (OVR ${unhappy.overall}) está no banco e a moral caiu pra ${unhappy.morale}. Ou ganha espaço, ou vai pedir pra sair.`,
+      playerId: unhappy.id,
+      playerName: unhappy.name,
+      options: [
+        { id: 'promote', label: 'Prometer espaço no time', detail: 'A moral dele melhora na hora — mas é você quem escala.' },
+        { id: 'ignore', label: 'Ignorar a reclamação', detail: 'A moral despenca; ele pode forçar a saída.' }
+      ]
+    })
+  }
+
+  // 3) contrato vencendo (Bosman à vista)
+  const expiring = ctx.players
+    .filter((p) => p.contractYears <= 1 && starters.has(p.id))
+    .sort((a, b) => b.overall - a.overall)[0]
+  if (expiring) {
+    const cost = renewalCost(expiring)
+    push({
+      id: `contract-${ctx.year}-${expiring.id}`,
+      kind: 'contract-expiring',
+      year: ctx.year,
+      title: `Contrato de ${expiring.name} acabando`,
+      text: `${expiring.name} (OVR ${expiring.overall}) termina o contrato em ${expiring.contractYears} ano(s). Renovar agora custa ${cost}M. Se deixar vencer, ele sai de graça.`,
+      playerId: expiring.id,
+      playerName: expiring.name,
+      amount: cost,
+      options: [
+        { id: 'renew', label: `Renovar por ${cost}M`, detail: '+3 anos de contrato e um reajuste salarial.' },
+        { id: 'ignore', label: 'Deixar correr', detail: 'Zero custo agora — risco de perdê-lo de graça no fim.' }
+      ]
+    })
+  }
+
+  // 4) diretoria cobra caixa (sem dívida no modelo: aperto = caixa baixo + folha cheia)
+  if (ctx.budget < 5 && ctx.wageBill > ctx.wageBudget * 0.9) {
+    const sellable = [...ctx.players]
+      .filter((p) => !starters.has(p.id))
+      .sort((a, b) => b.value - a.value)[0]
+    if (sellable) {
+      push({
+        id: `board-${ctx.year}`,
+        kind: 'board-sell-demand',
+        year: ctx.year,
+        title: 'A diretoria quer o caixa no azul',
+        text: `Caixa em ${ctx.budget}M e folha quase no teto. A diretoria sugere vender ${sellable.name} por ${sellable.value}M pra aliviar.`,
+        playerId: sellable.id,
+        playerName: sellable.name,
+        amount: sellable.value,
+        options: [
+          { id: 'comply', label: `Vender ${sellable.name}`, detail: 'Alivia o caixa e a folha; a diretoria aprova.' },
+          { id: 'refuse', label: 'Segurar o elenco', detail: 'Mantém o grupo, mas a confiança da diretoria cai.' }
+        ]
+      })
+    }
+  }
+
+  return out
 }
 
 // ─── Ofertas de emprego (decidido R3: quantidade+porte escalam; sempre ≥1) ───

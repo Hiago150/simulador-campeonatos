@@ -8,30 +8,37 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { Team, Tournament, TournamentConfig } from '../types'
-import type { Career, CareerLineup, CareerPlayer, FormationId, TransferRecord, YearReview } from '../types-career'
+import type { Career, CareerEvent, CareerLineup, CareerPlayer, FormationId, TransferRecord, YearReview } from '../types-career'
 import { createTournament, simulateAll, simulateRound } from '../engine/tournament'
 import { finalRanking } from '../engine/ranking'
 import { generateSquad } from '../engine/names'
 import { clamp, uid } from '../engine/rng'
 import {
+  aiTransfers,
   applyConfidence,
   applyLineupToTeam,
+  applyRoundMorale,
   bestLineup,
   clubTier,
   deriveClubStrength,
   evaluateYear,
   evolvePlayer,
   generateCareerRoster,
+  generateEvents,
   generateObjective,
   generateOffers,
   isFired,
   lineupSectors,
   negotiateFee,
+  renewPlayer,
+  renewalCost,
   seasonRevenue,
   startingBudget,
+  turnoverRoster,
   wageBill,
   wageCapFor,
-  verdictText
+  verdictText,
+  willRenew
 } from '../engine/career'
 import { useApp } from './app'
 
@@ -65,6 +72,9 @@ interface CareerStore {
   closeWindow: () => void
   buyPlayer: (playerId: string, fee: number) => BuyResult
   sellPlayer: (playerId: string) => BuyResult
+  // ── Fase 3: eventos + contratos ──
+  resolveEvent: (eventId: string, optionId: string) => void
+  renewContract: (playerId: string) => BuyResult
   abandonCareer: () => void
 }
 
@@ -145,6 +155,44 @@ function isStarterIn(roster: CareerPlayer[], playerId: string): boolean {
   return top.some((p) => p.id === playerId)
 }
 
+/** acrescenta os eventos novos derivados do estado atual (Fase 3) */
+function withNewEvents(c: Career): Career {
+  const fresh = generateEvents({
+    year: c.year,
+    players: c.players,
+    starterIds: c.lineup.starterIds,
+    teams: c.teams,
+    clubId: c.clubId,
+    rostersByClub: c.rostersByClub,
+    budget: c.budget,
+    wageBill: wageBill(c.players),
+    wageBudget: c.wageBudget,
+    existingIds: new Set(c.events.map((e) => e.id))
+  })
+  return fresh.length ? { ...c, events: [...fresh, ...c.events] } : c
+}
+
+/** roda o mercado dos clubes da IA ao abrir uma janela (Fase 3) */
+function runAiMarket(c: Career, seed: string): Career {
+  const { rostersByClub, moves } = aiTransfers(c.teams, c.rostersByClub, c.clubId, seed, MIN_SELL)
+  if (!moves.length) return c
+  const nameOf = (id: string) => c.teams.find((t) => t.id === id)?.name ?? id
+  const records: TransferRecord[] = moves.map((m) => ({
+    year: c.year,
+    window: c.window ?? 'pre-season',
+    playerId: m.player.id,
+    playerName: m.player.name,
+    fromClubId: m.fromId,
+    fromClubName: nameOf(m.fromId),
+    toClubId: m.toId,
+    toClubName: nameOf(m.toId),
+    fee: m.fee,
+    ai: true
+  }))
+  const next = { ...c, rostersByClub, marketLog: [...records, ...c.marketLog] }
+  return { ...next, tournament: retranslate(next) }
+}
+
 /** fecha o ano: avalia objetivo, atualiza confiança/reputação, receita, review */
 function concludeYear(c: Career, finished: Tournament): Career {
   const club = c.teams.find((t) => t.id === c.clubId)!
@@ -217,30 +265,42 @@ function concludeYear(c: Career, finished: Tournament): Career {
   }
 }
 
-/** evolui todos os elencos na virada do ano + top-up de quem ficou curto */
+/**
+ * Virada do ano: evolui todos os elencos, deixa sair quem teve o contrato
+ * vencido (Bosman — decidido R5) e repõe quem ficou curto.
+ */
 function turnoverRosters(c: Career, year: number): {
   players: CareerPlayer[]
   rostersByClub: Record<string, CareerPlayer[]>
+  freeAgents: { playerId: string; name: string; overall: number }[]
 } {
-  const evolveAll = (roster: CareerPlayer[]) => roster.map((p) => evolvePlayer(p, year))
-  const topUp = (roster: CareerPlayer[], club: Team | undefined): CareerPlayer[] => {
-    if (!club || roster.length >= MIN_SQUAD) return roster
-    const have = new Set(roster.map((p) => p.id))
-    const fresh = rosterFor(club).filter((p) => !have.has(p.id))
-    return [...roster, ...fresh].slice(0, Math.max(MIN_SQUAD, roster.length))
+  /** reposições SEMPRE inéditas: ids levam o ano (ver turnoverRoster no engine) */
+  const fillersFor = (club: Team | undefined) => (need: number): CareerPlayer[] => {
+    if (!club) return []
+    return rosterFor({ ...club, id: `${club.id}-y${year}` })
+      .map((p, i) => ({ ...p, id: `${club.id}-y${year}-f${i}` }))
+      .slice(0, need)
   }
-  const players = topUp(evolveAll(c.players), c.teams.find((t) => t.id === c.clubId))
+
+  const mine = turnoverRoster(c.players, year, MIN_SQUAD, fillersFor(c.teams.find((t) => t.id === c.clubId)))
+
   const rostersByClub: Record<string, CareerPlayer[]> = {}
   for (const [id, roster] of Object.entries(c.rostersByClub)) {
-    rostersByClub[id] = topUp(evolveAll(roster), c.teams.find((t) => t.id === id))
+    rostersByClub[id] = turnoverRoster(roster, year, MIN_SQUAD, fillersFor(c.teams.find((t) => t.id === id))).kept
   }
-  return { players, rostersByClub }
+
+  return {
+    players: mine.kept,
+    rostersByClub,
+    freeAgents: mine.left.map((p) => ({ playerId: p.id, name: p.name, overall: p.overall }))
+  }
 }
 
-/** abre a pré-temporada e monta a liga do ano (força já reflete os elencos) */
+/** abre a pré-temporada: roda o mercado da IA, monta a liga e gera eventos */
 function openSeason(c: Career): Career {
-  const withTournament = { ...c, tournament: buildYearTournament(c) }
-  return { ...withTournament, window: 'pre-season', midSeasonOpened: false }
+  const afterAi = runAiMarket({ ...c, window: 'pre-season' }, `${c.id}-${c.year}-pre`)
+  const withTournament = { ...afterAi, tournament: buildYearTournament(afterAi), midSeasonOpened: false }
+  return withNewEvents(withTournament)
 }
 
 export const useCareer = create<CareerStore>()(
@@ -270,6 +330,7 @@ export const useCareer = create<CareerStore>()(
           window: null,
           midSeasonOpened: false,
           marketLog: [],
+          events: [],
           reputation,
           confidence: 60,
           objective: generateObjective(club, pool.length, reputation),
@@ -321,23 +382,39 @@ export const useCareer = create<CareerStore>()(
       simRound: () => {
         const c = get().career
         if (!c?.tournament || c.status !== 'in-season' || c.window) return // janela aberta trava a rodada
+        const playedBefore = new Set(c.tournament.matches.filter((m) => m.played).map((m) => m.id))
         const t = simulateRound(c.tournament)
+
+        // moral: resultado do SEU jogo nesta rodada move o elenco (F3)
+        const myMatch = t.matches.find(
+          (m) => m.played && !playedBefore.has(m.id) && (m.homeId === c.clubId || m.awayId === c.clubId)
+        )
+        let players = c.players
+        if (myMatch) {
+          const mine = myMatch.homeId === c.clubId ? myMatch.homeScore : myMatch.awayScore
+          const theirs = myMatch.homeId === c.clubId ? myMatch.awayScore : myMatch.homeScore
+          const result = mine > theirs ? 'win' : mine < theirs ? 'loss' : 'draw'
+          players = applyRoundMorale(c.players, c.lineup.starterIds, result)
+        }
+
         if (t.phase === 'finished') {
-          set({ career: concludeYear({ ...c, tournament: t }, t) })
+          set({ career: concludeYear({ ...c, players, tournament: t }, t) })
           return
         }
         // pausa da janela intermediária ao cruzar a metade das partidas (1× no ano)
         const played = t.matches.filter((m) => m.played).length
         const openMid = !c.midSeasonOpened && played >= Math.floor(t.matches.length / 2)
-        set({
-          career: {
-            ...c,
-            tournament: t,
-            window: openMid ? 'mid-season' : c.window,
-            midSeasonOpened: c.midSeasonOpened || openMid,
-            updatedAt: Date.now()
-          }
-        })
+        let next: Career = {
+          ...c,
+          players,
+          tournament: t,
+          window: openMid ? 'mid-season' : c.window,
+          midSeasonOpened: c.midSeasonOpened || openMid,
+          updatedAt: Date.now()
+        }
+        // ao abrir a janela do meio, a IA também se movimenta
+        if (openMid) next = runAiMarket(next, `${c.id}-${c.year}-mid`)
+        set({ career: withNewEvents(next) })
       },
 
       simYear: () => {
@@ -363,12 +440,13 @@ export const useCareer = create<CareerStore>()(
           })
           return
         }
-        const { players, rostersByClub } = turnoverRosters(c, c.year)
+        const { players, rostersByClub, freeAgents } = turnoverRosters(c, c.year)
         const club = c.teams.find((t) => t.id === c.clubId)!
         const next: Career = {
           ...c,
           players,
           rostersByClub,
+          lastFreeAgents: freeAgents.length ? freeAgents : undefined,
           year: c.year + 1,
           objective: generateObjective(club, c.teams.length, c.reputation, c.lastPositionByClub[c.clubId]),
           status: 'in-season',
@@ -497,9 +575,145 @@ export const useCareer = create<CareerStore>()(
         return { ok: true }
       },
 
+      resolveEvent: (eventId, optionId) => {
+        const c = get().career
+        if (!c) return
+        const ev = c.events.find((e) => e.id === eventId && !e.resolvedOptionId)
+        if (!ev) return
+
+        let next: Career = { ...c }
+        let outcome = ''
+        const patchPlayer = (id: string, fn: (p: CareerPlayer) => CareerPlayer) => {
+          next = { ...next, players: next.players.map((p) => (p.id === id ? fn(p) : p)) }
+        }
+        const player = ev.playerId ? c.players.find((p) => p.id === ev.playerId) : undefined
+
+        if (ev.kind === 'rival-bid' && player) {
+          if (optionId === 'accept') {
+            // vende pro clube que fez a oferta
+            const buyerId = ev.clubId!
+            const players = next.players.filter((p) => p.id !== player.id)
+            next = {
+              ...next,
+              players,
+              rostersByClub: { ...next.rostersByClub, [buyerId]: [...(next.rostersByClub[buyerId] ?? []), player] },
+              budget: Math.round((next.budget + (ev.amount ?? player.value)) * 10) / 10,
+              lineup: bestLineup(players, next.lineup.formation),
+              marketLog: [
+                {
+                  year: c.year, window: c.window ?? 'pre-season',
+                  playerId: player.id, playerName: player.name,
+                  fromClubId: c.clubId, fromClubName: c.teams.find((t) => t.id === c.clubId)?.name ?? c.clubId,
+                  toClubId: buyerId, toClubName: ev.clubName ?? buyerId,
+                  fee: ev.amount ?? player.value
+                },
+                ...next.marketLog
+              ]
+            }
+            outcome = `${player.name} vendido ao ${ev.clubName} por ${ev.amount}M.`
+          } else {
+            patchPlayer(player.id, (p) => ({ ...p, morale: clamp(p.morale - 15, 0, 100) }))
+            outcome = `Proposta recusada. ${player.name} não gostou.`
+          }
+        } else if (ev.kind === 'bench-unhappy' && player) {
+          if (optionId === 'promote') {
+            patchPlayer(player.id, (p) => ({ ...p, morale: clamp(p.morale + 25, 0, 100) }))
+            outcome = `${player.name} recebeu a promessa de espaço e recuperou a moral.`
+          } else {
+            patchPlayer(player.id, (p) => ({ ...p, morale: clamp(p.morale - 20, 0, 100) }))
+            outcome = `${player.name} ficou de fora e a moral despencou.`
+          }
+        } else if (ev.kind === 'contract-expiring' && player) {
+          if (optionId === 'renew') {
+            const cost = ev.amount ?? renewalCost(player)
+            if (cost > next.budget) {
+              outcome = 'Sem caixa pra bancar a renovação.'
+            } else if (!willRenew(player)) {
+              outcome = `${player.name} está insatisfeito e recusou renovar.`
+            } else {
+              patchPlayer(player.id, renewPlayer)
+              next = { ...next, budget: Math.round((next.budget - cost) * 10) / 10 }
+              outcome = `${player.name} renovou por 3 anos (${cost}M).`
+            }
+          } else {
+            outcome = 'Contrato segue correndo — risco de perdê-lo de graça.'
+          }
+        } else if (ev.kind === 'board-sell-demand' && player) {
+          if (optionId === 'comply') {
+            const buyer = c.teams
+              .filter((t) => t.id !== c.clubId)
+              .sort((a, b) => b.strength - a.strength)[0]
+            const players = next.players.filter((p) => p.id !== player.id)
+            next = {
+              ...next,
+              players,
+              rostersByClub: buyer
+                ? { ...next.rostersByClub, [buyer.id]: [...(next.rostersByClub[buyer.id] ?? []), player] }
+                : next.rostersByClub,
+              budget: Math.round((next.budget + (ev.amount ?? player.value)) * 10) / 10,
+              lineup: bestLineup(players, next.lineup.formation),
+              confidence: applyConfidence(next.confidence, 3)
+            }
+            outcome = `${player.name} vendido por ${ev.amount}M — diretoria satisfeita.`
+          } else {
+            next = { ...next, confidence: applyConfidence(next.confidence, -8) }
+            outcome = 'Você segurou o elenco e a diretoria registrou o desagrado.'
+          }
+        }
+
+        next = {
+          ...next,
+          events: next.events.map((e) =>
+            e.id === eventId ? { ...e, resolvedOptionId: optionId, outcome } : e
+          ),
+          updatedAt: Date.now()
+        }
+        set({ career: { ...next, tournament: retranslate(next) } })
+      },
+
+      renewContract: (playerId) => {
+        const c = get().career
+        if (!c) return { ok: false, reason: 'Sem carreira ativa.' }
+        const player = c.players.find((p) => p.id === playerId)
+        if (!player) return { ok: false, reason: 'Jogador não está no seu elenco.' }
+        const cost = renewalCost(player)
+        if (cost > c.budget) return { ok: false, reason: `Renovação custa ${cost}M e o caixa não cobre.` }
+        if (!willRenew(player)) return { ok: false, reason: `${player.name} está insatisfeito e recusa renovar agora.` }
+        const next: Career = {
+          ...c,
+          players: c.players.map((p) => (p.id === playerId ? renewPlayer(p) : p)),
+          budget: Math.round((c.budget - cost) * 10) / 10,
+          updatedAt: Date.now()
+        }
+        set({ career: next })
+        return { ok: true }
+      },
+
       abandonCareer: () => set({ career: null })
     }),
-    { name: 'simcamp-career', version: 2, migrate: (persisted) => persisted as CareerStore }
+    {
+      name: 'simcamp-career',
+      version: 3,
+      // v2 → v3 (Fase 3): saves antigos não têm caixa de eventos nem moral;
+      // preenche com padrão em vez de quebrar a carreira do usuário.
+      migrate: (persisted) => {
+        const s = persisted as CareerStore
+        const c = s?.career
+        if (!c) return s
+        const fix = (p: CareerPlayer): CareerPlayer => (p.morale == null ? { ...p, morale: 65 } : p)
+        return {
+          ...s,
+          career: {
+            ...c,
+            events: c.events ?? [],
+            players: (c.players ?? []).map(fix),
+            rostersByClub: Object.fromEntries(
+              Object.entries(c.rostersByClub ?? {}).map(([k, v]) => [k, (v ?? []).map(fix)])
+            )
+          }
+        }
+      }
+    }
   )
 )
 
