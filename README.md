@@ -50,6 +50,29 @@ src/
       screens/     Telas (Início, Setup, Torneio, Histórico, Meus Times)
 ```
 
+## Dados reais e créditos
+
+Os elencos e escudos empacotados no app vêm de fontes públicas e são atualizados
+por scripts de manutenção — nenhum deles roda em tempo de execução, o app é offline.
+
+| Dado | Fonte | Script |
+| --- | --- | --- |
+| Elencos de e-sports (CS2 e Valorant) | [Liquipedia](https://liquipedia.net) — CC-BY-SA 3.0 | `npm run esports-rosters` |
+| Elencos de futebol | [TheSportsDB](https://www.thesportsdb.com) | `npm run squads` |
+| Escudos e logos | TheSportsDB | `npm run crests`, `npm run esports-logos` |
+
+O script de e-sports usa a API pública do MediaWiki da Liquipedia (sem chave),
+respeitando os [termos de uso](https://liquipedia.net/api-terms-of-use):
+User-Agent identificável, gzip e no máximo 1 requisição `action=parse` a cada
+30s — por isso um refresh completo dos dois jogos leva cerca de 1 hora.
+
+```bash
+npm run esports-rosters                 # os dois jogos (~1h)
+npm run esports-rosters -- --only=valorant
+npm run esports-rosters -- --ids=loud,navi
+npm run esports-rosters -- --resume     # pula quem já tem elenco
+```
+
 ## Notas de simulação
 
 - **Futebol:** gols via distribuição de Poisson ponderada pela diferença de força; artilheiros são atribuídos a jogadores gerados por time.
