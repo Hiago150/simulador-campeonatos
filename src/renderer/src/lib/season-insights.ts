@@ -292,8 +292,8 @@ export interface IdolEntry {
   mvps: number
   /** títulos do time do jogador na era (elencos não mudam de clube) */
   titles: number
-  bestYear?: { year: number; value: number }
-  perYear: Array<{ year: number; value: number }>
+  bestYear?: { year: number; value: number; titles: string[] }
+  perYear: Array<{ year: number; value: number; titles: string[] }>
 }
 
 export function eraIdols(season: Season): IdolEntry[] {
@@ -307,7 +307,10 @@ export function eraIdols(season: Season): IdolEntry[] {
     const perYear = season.years
       .map((y) => {
         const e = y.scorers.find((x) => x.playerId === s.playerId)
-        return { year: y.year, value: e ? valueOf(e) : 0 }
+        // campeonatos que o TIME do ídolo venceu naquele ano especificamente
+        // (o time pode ter vencido mais de um slot no mesmo ano)
+        const titles = y.champions.filter((c) => c.teamId === s.teamId).map((c) => c.slotName)
+        return { year: y.year, value: e ? valueOf(e) : 0, titles }
       })
       .filter((x) => x.value > 0)
     const bestYear = [...perYear].sort((a, b) => b.value - a.value)[0]

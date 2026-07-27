@@ -177,8 +177,50 @@ describe('eraIdols — lendas da era', () => {
     const [idol] = eraIdols(s)
     expect(idol.goals).toBe(45)
     expect(idol.titles).toBe(3)
-    expect(idol.bestYear).toEqual({ year: 1, value: 30 })
+    expect(idol.bestYear).toEqual({ year: 1, value: 30, titles: [] })
     expect(idol.perYear).toHaveLength(2)
+  })
+
+  it('mostra o título ESPECÍFICO que o time do ídolo ganhou naquele ano (não só a contagem)', () => {
+    const s = season({
+      sport: 'esports',
+      allTimeScorers: [{ playerId: 'p1', name: 'Lenda', teamId: 'alpha', teamName: 'ALPHA', goals: 0, kills: 40 }],
+      allTimeWins: { alpha: 2 },
+      years: [
+        yearEntry(1, {
+          scorers: [{ playerId: 'p1', name: 'Lenda', teamId: 'alpha', teamName: 'ALPHA', goals: 0, kills: 25 }],
+          champions: [{ slotId: 'kickoff', slotName: 'VCT Americas — Kickoff', teamId: 'alpha', teamName: 'ALPHA' }]
+        }),
+        yearEntry(2, {
+          scorers: [{ playerId: 'p1', name: 'Lenda', teamId: 'alpha', teamName: 'ALPHA', goals: 0, kills: 15 }],
+          champions: [{ slotId: 'champions', slotName: 'VCT Champions', teamId: 'beta', teamName: 'BETA' }] // outro time venceu
+        })
+      ]
+    })
+    const [idol] = eraIdols(s)
+    expect(idol.perYear).toEqual([
+      { year: 1, value: 25, titles: ['VCT Americas — Kickoff'] },
+      { year: 2, value: 15, titles: [] } // o time do ídolo não venceu nada nesse ano
+    ])
+    expect(idol.bestYear).toEqual({ year: 1, value: 25, titles: ['VCT Americas — Kickoff'] })
+  })
+
+  it('lista TODOS os títulos do ano quando o time ganha mais de um slot no mesmo ano', () => {
+    const s = season({
+      allTimeScorers: [{ playerId: 'p1', name: 'Lenda', teamId: 'alpha', teamName: 'ALPHA', goals: 10, kills: 0 }],
+      allTimeWins: { alpha: 2 },
+      years: [
+        yearEntry(1, {
+          scorers: [{ playerId: 'p1', name: 'Lenda', teamId: 'alpha', teamName: 'ALPHA', goals: 10, kills: 0 }],
+          champions: [
+            { slotId: 'liga', slotName: 'Brasileirão', teamId: 'alpha', teamName: 'ALPHA' },
+            { slotId: 'copa', slotName: 'Copa do Brasil', teamId: 'alpha', teamName: 'ALPHA' }
+          ]
+        })
+      ]
+    })
+    const [idol] = eraIdols(s)
+    expect(idol.perYear[0].titles).toEqual(['Brasileirão', 'Copa do Brasil'])
   })
 
   it('futebol: ranking da era soma gols+assistências (um artilheiro puro pode perder pra um mais completo)', () => {

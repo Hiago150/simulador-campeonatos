@@ -265,13 +265,31 @@ function IdolRow({
             <p className="mb-2 text-xs text-zinc-400">
               Melhor temporada: <span className="font-bold text-zinc-200">Ano {idol.bestYear.year}</span> —{' '}
               {idol.bestYear.value} {isEsports ? 'abates' : 'participações em gol'}
+              {idol.bestYear.titles.length > 0 && (
+                <>
+                  {' · '}
+                  <Trophy size={10} className="-mt-0.5 inline text-amber-400" />{' '}
+                  <span className="font-semibold text-amber-300">{idol.bestYear.titles.join(', ')}</span>
+                </>
+              )}
             </p>
           )}
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-col gap-1.5">
             {idol.perYear.map((y) => (
-              <span key={y.year} className="tnum rounded-lg bg-ink-800/70 px-2 py-1 text-[11px] text-zinc-400">
-                Ano {y.year}: <span className="font-bold text-zinc-200">{y.value}</span>
-              </span>
+              <div
+                key={y.year}
+                className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-lg bg-ink-800/70 px-2 py-1.5 text-[11px] text-zinc-400"
+              >
+                <span className="tnum shrink-0">
+                  Ano {y.year}: <span className="font-bold text-zinc-200">{y.value}</span>
+                </span>
+                {y.titles.length > 0 && (
+                  <span className="flex min-w-0 items-center gap-1 text-amber-300">
+                    <Trophy size={10} className="shrink-0 text-amber-400" />
+                    <span className="truncate">{y.titles.join(' · ')}</span>
+                  </span>
+                )}
+              </div>
             ))}
           </div>
         </div>
