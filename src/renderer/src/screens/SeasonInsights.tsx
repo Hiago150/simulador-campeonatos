@@ -19,6 +19,7 @@ import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip as RToolti
 import type { Season, SeasonYearEntry, Team } from '../types'
 import {
   clubProfile,
+  eraClubRanking,
   eraHeadToHead,
   eraIdols,
   eraStrengthSeries,
@@ -330,11 +331,17 @@ export function ClubsTab({
   onFocus: (teamId: string | null) => void
 }) {
   const chart = useMemo(() => eraStrengthSeries(season), [season])
-  const clubs = useMemo(() => {
-    return season.teamPool
-      .map((t) => ({ id: t.id, wins: season.allTimeWins[t.id] ?? 0, team: poolMap[t.id] }))
-      .sort((a, b) => b.wins - a.wins || (a.team?.name ?? a.id).localeCompare(b.team?.name ?? b.id))
-  }, [season, poolMap])
+  // ranking por relevância (peso do campeonato). Sem pesos custom, degenera pra
+  // ordem de títulos — então serve pros dois casos.
+  const ranking = useMemo(() => eraClubRanking(season), [season])
+  const hasWeights = useMemo(
+    () => season.slots.some((s) => s.weight != null && s.weight !== 1),
+    [season]
+  )
+  const clubs = useMemo(() => ranking.map((r) => ({ ...r, team: poolMap[r.teamId] })), [ranking, poolMap])
+  // clube mais relevante: só destaca quando há pesos custom (senão é só o mais
+  // titulado, que a lista já mostra) e alguém já ganhou algo
+  const topClub = hasWeights ? clubs.find((c) => c.points > 0) ?? null : null
 
   if (focusTeamId) {
     return <ClubProfileView season={season} teamId={focusTeamId} poolMap={poolMap} onBack={() => onFocus(null)} />
@@ -396,27 +403,64 @@ export function ClubsTab({
         </div>
       )}
 
+      {topClub && (
+        <button
+          onClick={() => onFocus(topClub.teamId)}
+          className="panel flex w-full items-center gap-4 border-amber-600/30 bg-amber-950/10 p-4 text-left transition hover:border-amber-500/50"
+        >
+          <Crown size={22} className="shrink-0 text-amber-400" />
+          <TeamBadge team={topClub.team} size="md" />
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-400/80">
+              Clube mais relevante da era
+            </p>
+            <p className="truncate text-lg font-bold text-zinc-100">{topClub.team?.name ?? topClub.teamId}</p>
+          </div>
+          <div className="shrink-0 text-right">
+            <p className="tnum text-xl font-bold text-amber-300">{topClub.points} pts</p>
+            <p className="tnum text-[11px] text-zinc-500">{topClub.titles} título(s)</p>
+          </div>
+        </button>
+      )}
+
       <div>
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-zinc-500">
           Todos os clubes da era — clique pra abrir o perfil
+        </p>
+        <p className="mb-3 text-[11px] text-zinc-600">
+          {hasWeights
+            ? 'Ordenado por relevância (pontos ponderados pelo peso de cada campeonato), não só pela quantidade de títulos.'
+            : 'Ordenado por títulos. Defina pesos por campeonato na criação da temporada pra ranquear por relevância.'}
         </p>
         {clubs.length === 0 ? (
           <Empty text="Nenhum clube na temporada ainda." />
         ) : (
           <div className="grid gap-2 sm:grid-cols-2">
-            {clubs.map((c) => (
+            {clubs.map((c, i) => (
               <button
-                key={c.id}
-                onClick={() => onFocus(c.id)}
+                key={c.teamId}
+                onClick={() => onFocus(c.teamId)}
                 className="panel flex items-center gap-2.5 p-3 text-left transition hover:border-blood-600/40"
               >
+                {hasWeights && (
+                  <span className="tnum w-4 shrink-0 text-right text-[11px] font-bold text-zinc-600">{i + 1}</span>
+                )}
                 <TeamBadge team={c.team} size="sm" />
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-200">
-                  {c.team?.name ?? c.id}
+                  {c.team?.name ?? c.teamId}
                 </span>
-                <span className={cx('tnum shrink-0 text-sm font-bold', c.wins > 0 ? 'text-amber-400' : 'text-zinc-600')}>
-                  {c.wins > 0 ? `${c.wins}×` : '—'}
-                </span>
+                {hasWeights ? (
+                  <span className="shrink-0 text-right">
+                    <span className={cx('tnum block text-sm font-bold', c.points > 0 ? 'text-amber-400' : 'text-zinc-600')}>
+                      {c.points > 0 ? `${c.points} pts` : '—'}
+                    </span>
+                    <span className="tnum block text-[10px] text-zinc-600">{c.titles}× título(s)</span>
+                  </span>
+                ) : (
+                  <span className={cx('tnum shrink-0 text-sm font-bold', c.titles > 0 ? 'text-amber-400' : 'text-zinc-600')}>
+                    {c.titles > 0 ? `${c.titles}×` : '—'}
+                  </span>
+                )}
               </button>
             ))}
           </div>

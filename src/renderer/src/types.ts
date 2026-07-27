@@ -363,6 +363,14 @@ export interface SeasonSlot {
    * "ano anterior" ainda).
    */
   previousYearBye?: { fromSlotId: string }
+  /**
+   * Peso de RELEVÂNCIA do título deste campeonato (padrão 1 quando ausente).
+   * NÃO altera a contagem de títulos (`allTimeWins` continua +1 por conquista)
+   * — serve só pro ranking ponderado da era ("clube mais relevante"), pra que
+   * ganhar um Champions (peso alto) valha mais que vários Kickoffs (peso baixo).
+   * Ver `eraClubRanking` em `lib/season-insights.ts`.
+   */
+  weight?: number
 }
 
 export interface SeasonScorerEntry {

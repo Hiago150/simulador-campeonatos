@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { yearArcs, yearAwards, eraIdols, eraHeadToHead, clubProfile, eraStrengthSeries } from './season-insights'
+import { yearArcs, yearAwards, eraIdols, eraHeadToHead, clubProfile, eraStrengthSeries, eraClubRanking, slotWeight } from './season-insights'
 import type { Match, Season, SeasonYearEntry, Team, Tournament } from '../types'
 
 // ─── fixtures sintéticas mínimas ─────────────────────────────────────────────
@@ -191,6 +191,56 @@ describe('eraIdols — lendas da era', () => {
     })
     const idols = eraIdols(s)
     expect(idols.map((i) => i.playerId)).toEqual(['completo', 'artilheiro'])
+  })
+})
+
+describe('eraClubRanking — relevância ponderada pelo peso do campeonato', () => {
+  // dois campeonatos: "kickoff" peso 1, "champions" peso 3
+  const SLOTS = [
+    { id: 'kickoff', name: 'Kickoff', format: 'cup', config: {} as Season['slots'][0]['config'], weight: 1 },
+    { id: 'champions', name: 'Champions', format: 'cup', config: {} as Season['slots'][0]['config'], weight: 3 }
+  ]
+  const champ = (slotId: string, slotName: string, teamId: string) => ({
+    slotId,
+    slotName,
+    teamId,
+    teamName: teamId.toUpperCase()
+  })
+
+  it('peso vira a ordem: 1 Champions vale mais que 2 Kickoffs', () => {
+    const s = season({
+      slots: SLOTS,
+      allTimeWins: { alpha: 2, beta: 1 }, // alpha tem MAIS títulos
+      years: [
+        yearEntry(1, { champions: [champ('kickoff', 'Kickoff', 'alpha'), champ('champions', 'Champions', 'beta')] }),
+        yearEntry(2, { champions: [champ('kickoff', 'Kickoff', 'alpha')] })
+      ]
+    })
+    const rank = eraClubRanking(s)
+    // beta (3 pts, 1 título) fica na frente de alpha (2 pts, 2 títulos)
+    expect(rank.map((r) => r.teamId).slice(0, 2)).toEqual(['beta', 'alpha'])
+    expect(rank.find((r) => r.teamId === 'beta')).toMatchObject({ points: 3, titles: 1 })
+    expect(rank.find((r) => r.teamId === 'alpha')).toMatchObject({ points: 2, titles: 2 })
+  })
+
+  it('inclui todo o pool com zero e mantém a ordem de títulos quando pesos são iguais', () => {
+    const s = season({
+      allTimeWins: { alpha: 2, beta: 1 }, // slots default (peso 1)
+      years: [
+        yearEntry(1, { champions: [champ('liga', 'Liga', 'alpha'), champ('liga', 'Liga', 'beta')] }),
+        yearEntry(2, { champions: [champ('liga', 'Liga', 'alpha')] })
+      ]
+    })
+    const rank = eraClubRanking(s)
+    expect(rank).toHaveLength(POOL.length) // todos os clubes entram
+    expect(rank[0]).toMatchObject({ teamId: 'alpha', points: 2 })
+    expect(rank.find((r) => r.teamId === 'zeta')).toMatchObject({ points: 0, titles: 0 })
+  })
+
+  it('slotWeight cai pra 1 quando o slot não tem peso ou não existe', () => {
+    const s = season({ slots: SLOTS })
+    expect(slotWeight(s, 'champions')).toBe(3)
+    expect(slotWeight(s, 'inexistente')).toBe(1)
   })
 })
 

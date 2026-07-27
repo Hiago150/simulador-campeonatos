@@ -32,6 +32,8 @@ export interface SeasonPresetSlot {
   }
   /** bye vindo do ano anterior — ver `SeasonSlot.previousYearBye` (índice do slot-fonte) */
   previousYearBye?: { fromSlot: number }
+  /** peso de relevância do título — ver `SeasonSlot.weight` (padrão 1) */
+  weight?: number
 }
 
 export interface SeasonPreset {
@@ -156,7 +158,8 @@ function vctMastersStage(
       teamIds: [],
       phaseLabel,
       // 2º e 3º colocados de cada região (8 times, 2 grupos cruzados)
-      qualifiesFrom: sourceSlots.map((slot) => ({ slot, count: 2, offset: 1 }))
+      qualifiesFrom: sourceSlots.map((slot) => ({ slot, count: 2, offset: 1 })),
+      weight: 0.5 // só qualifica pro Playoffs — não é título
     },
     {
       name: `${label} — Playoffs`,
@@ -168,7 +171,8 @@ function vctMastersStage(
       qualifiesFrom: [
         ...sourceSlots.map((slot) => ({ slot, count: 1 })), // 1º de cada região — bye direto
         { slot: sourceSlots[sourceSlots.length - 1] + 1, count: 4 } // top-4 da fase classificatória (slot logo acima)
-      ]
+      ],
+      weight: 2 // título de Masters — no meio da hierarquia
     }
   ]
 }
@@ -183,6 +187,7 @@ const VALORANT_SLOTS: SeasonPresetSlot[] = [
       config: { bestOf: 3 },
       teamIds: r.teams,
       phaseLabel: 'Kickoff',
+      weight: 1, // título regional de abertura — base da hierarquia
       // a partir do 2º ano, os 4 representantes da região no Champions
       // anterior entram com vantagem de semeadura (viram o bye ao completar
       // a chave até 16); sem efeito no 1º ano (não há Champions anterior)
@@ -199,7 +204,8 @@ const VALORANT_SLOTS: SeasonPresetSlot[] = [
       game: 'valorant',
       config: { groupCount: 2, qualifiersPerGroup: 4, bestOf: 3 },
       teamIds: r.teams,
-      phaseLabel: 'Stage 1'
+      phaseLabel: 'Stage 1',
+      weight: 1 // título regional, mesmo patamar do Kickoff
     })
   ),
   // ── Masters 2 (10-11) — mesmo molde do Masters 1, agora a partir do Stage 1 ──
@@ -212,7 +218,8 @@ const VALORANT_SLOTS: SeasonPresetSlot[] = [
       game: 'valorant',
       config: { groupCount: 2, qualifiersPerGroup: 2, bestOf: 3 },
       teamIds: r.teams,
-      phaseLabel: 'Stage 2'
+      phaseLabel: 'Stage 2',
+      weight: 0.5 // fase de grupos — alimenta Play-Ins/Playoffs, não é título
     })
   ),
   ...VCT_REGIONS.map(
@@ -223,6 +230,7 @@ const VALORANT_SLOTS: SeasonPresetSlot[] = [
       config: { bestOf: 3 },
       teamIds: [],
       phaseLabel: 'Stage 2',
+      weight: 0.5, // fase intermediária — decide quem vai pro Playoffs
       // os 4 que fizeram o mini-mata-mata do top-2/grupo ficam nas 4 primeiras
       // posições da classificação (índices 0-3); os outros 8 (3º-6º de cada
       // grupo) vêm em seguida, ordenados só pela posição no grupo
@@ -237,6 +245,7 @@ const VALORANT_SLOTS: SeasonPresetSlot[] = [
       config: { bestOf: 3 },
       teamIds: [],
       phaseLabel: 'Stage 2',
+      weight: 1.5, // título regional do Stage 2 — vale mais que Kickoff/Stage 1
       qualifiesFrom: [
         { slot: 12 + i, count: 4 }, // top-2/grupo direto (4)
         { slot: 16 + i, count: 4 } // sobreviventes dos Play-Ins (4)
@@ -251,6 +260,7 @@ const VALORANT_SLOTS: SeasonPresetSlot[] = [
     config: { groupCount: 4, qualifiersPerGroup: 2, bestOf: 3 },
     teamIds: [],
     phaseLabel: 'Champions',
+    weight: 3, // o título máximo do ano — topo da hierarquia
     qualifiesFrom: [20, 21, 22, 23].map((slot) => ({ slot, count: 2 })), // finalistas do Stage 2 Playoffs
     vctConsistencyWildcards: {
       count: 2,

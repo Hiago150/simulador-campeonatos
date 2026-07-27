@@ -42,7 +42,7 @@ import type {
 } from '../types'
 import { useApp } from '../store/app'
 import { useSeasons, resolveSlotArrivals, type SlotArrival } from '../store/season'
-import { eraHeadToHead } from '../lib/season-insights'
+import { eraHeadToHead, eraClubRanking } from '../lib/season-insights'
 import { presetsForSport } from '../data/teams'
 import { collectionsForSport, collectionsGrouped } from '../data/collections'
 import { seasonPresetsGrouped, type SeasonPreset } from '../data/season-presets'
@@ -555,6 +555,7 @@ function SeasonWizard({ onBack, onDone }: { onBack: () => void; onDone: (s: Seas
       id: slotIds[i],
       name: sl.name,
       format: sl.format,
+      weight: sl.weight,
       teamIds: sl.teamIds.length > 0 ? sl.teamIds : undefined,
       qualifiesFrom: sl.qualifiesFrom?.map((q) => ({
         slotId: slotIds[q.slot],
@@ -1247,6 +1248,11 @@ function SlotEditor({
         {slot.teamIds && slot.teamIds.length > 0 && (
           <span className="tag text-[10px] border-blood-700/40 text-blood-300">{slot.teamIds.length} times</span>
         )}
+        {slot.weight != null && slot.weight !== 1 && (
+          <span className="tag text-[10px] border-amber-700/40 text-amber-300" title="Peso na relevância da era">
+            {slot.weight}× peso
+          </span>
+        )}
         <span className="tag text-[10px]">{FORMAT_META[slot.format].short}</span>
         <div className="flex items-center gap-0.5">
           <button
@@ -1284,6 +1290,28 @@ function SlotEditor({
               onChange={(e) => onChange({ name: e.target.value })}
               placeholder="Nome do campeonato"
             />
+          </div>
+
+          <div className="mb-3 flex flex-col gap-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Peso do título</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={0}
+                step={0.5}
+                className="input w-24"
+                value={slot.weight ?? 1}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value)
+                  // 1 é o padrão — não guarda o campo quando é neutro
+                  onChange({ weight: Number.isFinite(v) && v !== 1 ? Math.max(0, v) : undefined })
+                }}
+              />
+              <p className="text-[11px] leading-snug text-zinc-600">
+                Peso na relevância da era (padrão 1). Não muda a contagem de títulos — só o ranking de
+                clube mais relevante. Ex.: Kickoff 1, Masters 2, Champions 3.
+              </p>
+            </div>
           </div>
 
           <div className="mb-3">
@@ -2545,8 +2573,11 @@ function SeasonFinale({ onLeave, onHall }: { onLeave: () => void; onHall: () => 
   const game = s.game ? GAME_META[s.game] : null
   const poolMap = Object.fromEntries(s.teamPool.map((t) => [t.id, t]))
 
-  const podium = Object.entries(s.allTimeWins)
-    .sort(([, a], [, b]) => b - a)
+  // pódio da era por RELEVÂNCIA (peso do campeonato); sem pesos custom degenera
+  // pra ordem de títulos
+  const hasWeights = s.slots.some((sl) => sl.weight != null && sl.weight !== 1)
+  const podium = eraClubRanking(s)
+    .filter((r) => r.titles > 0)
     .slice(0, 3)
   // era encerrada: o "maior artilheiro" combina gols+assistências (futebol) —
   // no dia-a-dia é uma tabela com as duas colunas, mas ao final vira um número só
@@ -2568,7 +2599,7 @@ function SeasonFinale({ onLeave, onHall }: { onLeave: () => void; onHall: () => 
 
   // ordena pódio para layout 2º–1º–3º
   const layout = podium.length === 3 ? [podium[1], podium[0], podium[2]] : podium
-  const rankOf = (entry: [string, number]) => podium.indexOf(entry)
+  const rankOf = (entry: (typeof podium)[number]) => podium.indexOf(entry)
 
   return (
     <div className="h-full overflow-y-auto">
@@ -2592,7 +2623,7 @@ function SeasonFinale({ onLeave, onHall }: { onLeave: () => void; onHall: () => 
         {/* Pódio */}
         <div className="panel mb-5 p-6">
           <p className="mb-5 text-center text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
-            Maiores campeões da era
+            {hasWeights ? 'Clubes mais relevantes da era' : 'Maiores campeões da era'}
           </p>
           {podium.length === 0 ? (
             <p className="text-center text-sm text-zinc-600">Nenhum título conquistado.</p>
@@ -2601,17 +2632,24 @@ function SeasonFinale({ onLeave, onHall }: { onLeave: () => void; onHall: () => 
               {layout.map((entry) => {
                 const rank = rankOf(entry)
                 const meta = PODIUM_META[rank]
-                const team = poolMap[entry[0]]
+                const team = poolMap[entry.teamId]
                 return (
-                  <div key={entry[0]} className={cx('flex flex-1 flex-col items-center gap-2', rank === 0 && '-mt-4')}>
+                  <div key={entry.teamId} className={cx('flex flex-1 flex-col items-center gap-2', rank === 0 && '-mt-4')}>
                     <span className={cx('text-xs font-bold', meta.text)}>{meta.label}</span>
                     <div className={cx('rounded-full p-1 ring-2', meta.ring, meta.bg)}>
                       <TeamBadge team={team} size={meta.size} />
                     </div>
                     <span className="text-center text-xs font-bold text-zinc-100 leading-tight">
-                      {team?.name ?? entry[0]}
+                      {team?.name ?? entry.teamId}
                     </span>
-                    <span className={cx('tnum text-sm font-bold', meta.text)}>{entry[1]}× campeão</span>
+                    {hasWeights ? (
+                      <span className="flex flex-col items-center leading-tight">
+                        <span className={cx('tnum text-sm font-bold', meta.text)}>{entry.points} pts</span>
+                        <span className="tnum text-[10px] text-zinc-500">{entry.titles}× campeão</span>
+                      </span>
+                    ) : (
+                      <span className={cx('tnum text-sm font-bold', meta.text)}>{entry.titles}× campeão</span>
+                    )}
                   </div>
                 )
               })}

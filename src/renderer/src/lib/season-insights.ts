@@ -431,6 +431,48 @@ export function clubProfile(season: Season, teamId: string): ClubProfile {
   return { teamId, titles, campaigns, idols, strengthHistory }
 }
 
+// ─────────────────────── Ranking de relevância da era ───────────────────────
+
+export interface EraClubRank {
+  teamId: string
+  name: string
+  /** pontos ponderados pelo peso de cada campeonato conquistado */
+  points: number
+  /** títulos crus (contagem), independente do peso */
+  titles: number
+}
+
+/** peso de relevância de um campeonato (slot); ausente/inválido = 1 */
+export function slotWeight(season: Season, slotId: string): number {
+  const w = season.slots.find((s) => s.id === slotId)?.weight
+  return typeof w === 'number' && w >= 0 ? w : 1
+}
+
+/**
+ * Ranking de relevância da era: cada título vale o `weight` do seu campeonato
+ * (padrão 1). Diferente da contagem crua — um time com muitos Kickoffs (peso
+ * baixo) pode ficar atrás de quem ganhou um Champions (peso alto). Isola o
+ * "clube mais relevante/forte da era" de quem só empilhou títulos menores.
+ * Inclui todo o pool; ordena por pontos, desempata por títulos e nome.
+ */
+export function eraClubRanking(season: Season): EraClubRank[] {
+  const points = new Map<string, number>()
+  for (const y of season.years) {
+    for (const c of y.champions) {
+      points.set(c.teamId, (points.get(c.teamId) ?? 0) + slotWeight(season, c.slotId))
+    }
+  }
+  return season.teamPool
+    .map((t) => ({
+      teamId: t.id,
+      name: t.name,
+      // arredonda pra 2 casas: pesos decimais (ex.: 1.5) não geram 4.499999…
+      points: Math.round((points.get(t.id) ?? 0) * 100) / 100,
+      titles: season.allTimeWins[t.id] ?? 0
+    }))
+    .sort((a, b) => b.points - a.points || b.titles - a.titles || a.name.localeCompare(b.name))
+}
+
 // ─────────────────────── Evolução da era (gráfico) ──────────────────────────
 
 export interface EraStrengthSeries {
