@@ -16,9 +16,10 @@ import {
 import type { BestOf, EsportsGame, Sport, Team, TeamCategory } from '../types'
 import { useApp } from '../store/app'
 import { presetsForSport } from '../data/teams'
+import { roundName } from '../engine/bracket'
 import { collectionsForSport, collectionsGrouped } from '../data/collections'
 import { championshipsGrouped, type ChampionshipPreset } from '../data/championships'
-import { ESPORTS_GAMES, GAME_META } from '../lib/meta'
+import { ESPORTS_GAMES, GAME_META, KO_CAPABLE_FORMATS, KO_OVERRIDE_TIERS } from '../lib/meta'
 import { FORMATS, FORMAT_META, SPORT_META } from '../lib/meta'
 import { Button, Modal, Segmented, Slider, Stepper, StrengthBar, Toggle } from '../components/ui'
 import { Reveal } from '../components/motionx'
@@ -75,6 +76,9 @@ export function SetupScreen() {
   const [momentum, setMomentum] = useState(false)
   const [homeAndAway, setHomeAndAway] = useState(false)
   const [bestOf, setBestOf] = useState<BestOf>(3)
+  // troca de série a partir de uma fase (ex.: Semifinal vira BO5) — null = sem troca
+  const [koOverrideFrom, setKoOverrideFrom] = useState<number | null>(null)
+  const [koOverrideBestOf, setKoOverrideBestOf] = useState<BestOf>(5)
   const [game, setGame] = useState<EsportsGame>('cs2')
   const [groupCount, setGroupCount] = useState(4)
   const [qualifiers, setQualifiers] = useState(2)
@@ -173,6 +177,8 @@ export function SetupScreen() {
     setSearch('')
     setHomeAndAway(c.config.homeAndAway ?? false)
     setBestOf(c.config.bestOf ?? 3)
+    setKoOverrideFrom(null)
+    setKoOverrideBestOf(5)
     setGroupCount(c.config.groupCount ?? 4)
     setQualifiers(c.config.qualifiersPerGroup ?? 2)
     setSwissRounds(c.config.swissRounds ?? 5)
@@ -245,7 +251,11 @@ export function SetupScreen() {
           qualifiersPerGroup: qualifiers,
           swissRounds,
           playoffQualifiers,
-          twoLeggedKO: sport === 'football' ? twoLeggedKO : false
+          twoLeggedKO: sport === 'football' ? twoLeggedKO : false,
+          bestOfKoOverride:
+            sport === 'esports' && KO_CAPABLE_FORMATS.includes(format) && koOverrideFrom != null
+              ? { fromTeams: koOverrideFrom, bestOf: koOverrideBestOf }
+              : undefined
         }
       },
       mcRuns
@@ -632,6 +642,41 @@ export function SetupScreen() {
                       ]}
                     />
                   </div>
+                  {KO_CAPABLE_FORMATS.includes(format) && (
+                    <div>
+                      <p className="mb-2 text-xs font-semibold text-zinc-400">Trocar de série numa fase do mata-mata</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <select
+                          className="input w-auto py-1.5 text-xs"
+                          value={koOverrideFrom ?? ''}
+                          onChange={(e) => setKoOverrideFrom(e.target.value ? Number(e.target.value) : null)}
+                        >
+                          <option value="">Não trocar</option>
+                          {KO_OVERRIDE_TIERS.map((n) => (
+                            <option key={n} value={n}>
+                              A partir de: {roundName(n)}
+                            </option>
+                          ))}
+                        </select>
+                        {koOverrideFrom != null && (
+                          <Segmented
+                            value={koOverrideBestOf}
+                            onChange={(v) => setKoOverrideBestOf(v as BestOf)}
+                            options={[
+                              { value: 1, label: 'BO1' },
+                              { value: 3, label: 'BO3' },
+                              { value: 5, label: 'BO5' }
+                            ]}
+                          />
+                        )}
+                      </div>
+                      <p className="mt-1.5 text-[11px] leading-snug text-zinc-600">
+                        Comum em circuitos reais (ex.: Semifinal/Final em BO5 mesmo com o resto em BO3).
+                        Vale pra dupla/tripla eliminação também: qualquer rodada da chave superior, inferior
+                        ou grande final com esse nº de times (ou menos) já entra na nova série.
+                      </p>
+                    </div>
+                  )}
                 </>
               )}
 

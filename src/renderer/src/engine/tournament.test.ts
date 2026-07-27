@@ -53,6 +53,82 @@ describe('engine — mata-mata ida e volta', () => {
   })
 })
 
+describe('engine — bestOfKoOverride (troca de série a partir de uma fase)', () => {
+  it('cup: só a Final (fromTeams:2) vira BO5, o resto continua BO3', () => {
+    const t0 = createTournament({
+      name: 'Cup',
+      sport: 'esports',
+      format: 'cup',
+      teams: mkTeams(8, 'esports'),
+      config: baseConfig({ game: 'cs2', bestOf: 3, bestOfKoOverride: { fromTeams: 2, bestOf: 5 } })
+    })
+    const t = simulateAll(t0)
+    expect(t.champion).toBeTruthy()
+    const final = t.matches.filter((m) => m.stage === 'Final')
+    const rest = t.matches.filter((m) => m.stage !== 'Final')
+    expect(final).toHaveLength(1)
+    expect(final[0].esports?.bestOf).toBe(5)
+    expect(rest.length).toBeGreaterThan(0)
+    expect(rest.every((m) => m.esports?.bestOf === 3)).toBe(true)
+  })
+
+  it('groups: override a partir da Semifinal (fromTeams:4) pega Semi+Final da fase de playoffs, não as Quartas', () => {
+    const t0 = createTournament({
+      name: 'Grupos',
+      sport: 'esports',
+      format: 'groups',
+      teams: mkTeams(16, 'esports'),
+      config: baseConfig({
+        game: 'cs2',
+        bestOf: 3,
+        groupCount: 4,
+        qualifiersPerGroup: 2,
+        bestOfKoOverride: { fromTeams: 4, bestOf: 5 }
+      })
+    })
+    const t = simulateAll(t0)
+    expect(t.champion).toBeTruthy()
+    const quartas = t.matches.filter((m) => m.stage === 'Quartas de final')
+    const semiFinal = t.matches.filter((m) => m.stage === 'Semifinal' || m.stage === 'Final')
+    expect(quartas.length).toBeGreaterThan(0)
+    expect(semiFinal.length).toBeGreaterThan(0)
+    expect(quartas.every((m) => m.esports?.bestOf === 3)).toBe(true)
+    expect(semiFinal.every((m) => m.esports?.bestOf === 5)).toBe(true)
+  })
+
+  it('dupla eliminação: override propaga pra Winners, Losers E Grande Final (nº de times, não a seção)', () => {
+    const t0 = createTournament({
+      name: 'Dupla',
+      sport: 'esports',
+      format: 'double-elim',
+      teams: mkTeams(8, 'esports'),
+      config: baseConfig({ game: 'cs2', bestOf: 3, bestOfKoOverride: { fromTeams: 4, bestOf: 5 } })
+    })
+    const t = simulateAll(t0)
+    expect(t.champion).toBeTruthy()
+    const wbQuartas = t.matches.filter((m) => m.stage === 'Winners · Quartas de final')
+    const overridden = t.matches.filter((m) => m.stage !== 'Winners · Quartas de final')
+    expect(wbQuartas.length).toBeGreaterThan(0)
+    expect(wbQuartas.every((m) => m.esports?.bestOf === 3)).toBe(true)
+    // Winners·Semifinal/Final, todo o Losers e a Grande Final têm <=4 times na
+    // rodada — devem estar em BO5
+    expect(overridden.length).toBeGreaterThan(0)
+    expect(overridden.every((m) => m.esports?.bestOf === 5)).toBe(true)
+  })
+
+  it('sem override, comportamento de sempre (tudo no bestOf geral)', () => {
+    const t0 = createTournament({
+      name: 'SemOverride',
+      sport: 'esports',
+      format: 'cup',
+      teams: mkTeams(8, 'esports'),
+      config: baseConfig({ game: 'cs2', bestOf: 3 })
+    })
+    const t = simulateAll(t0)
+    expect(t.matches.every((m) => m.esports?.bestOf === 3)).toBe(true)
+  })
+})
+
 describe('engine — seed por posição de chegada (arrivals)', () => {
   const strong = { id: 'strong', name: 'Strong', shortName: 'STR', strength: 92, category: 'custom' as const, sport: 'football' as const, color: '#fff' }
   const weak = { id: 'weak', name: 'Weak', shortName: 'WEA', strength: 40, category: 'custom' as const, sport: 'football' as const, color: '#fff' }

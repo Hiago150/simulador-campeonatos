@@ -1,5 +1,7 @@
 // Orquestrador — criação de torneios, contexto de simulação e avanço de fases
 import type {
+  BestOf,
+  BracketRound,
   Format,
   Group,
   Match,
@@ -323,11 +325,39 @@ function legInfo(
   return { isLeg1: false, isLeg2: false, decisive: false }
 }
 
+/** rodada do chaveamento (`t.bracket`) que contém esta partida, se houver */
+function bracketRoundOf(t: Tournament, matchId: string): BracketRound | undefined {
+  if (!t.bracket) return undefined
+  for (const round of t.bracket) {
+    for (const bm of round.matches) {
+      if (bm.matchId === matchId) return round
+      if (bm.legIds?.includes(matchId)) return round
+    }
+  }
+  return undefined
+}
+
+/**
+ * BO efetivo desta partida: aplica `bestOfKoOverride` quando a rodada do
+ * mata-mata que a contém tem nº de times <= `fromTeams`. Nº de times = nº de
+ * confrontos concorrentes da rodada × 2 — vale igual pra Winners, Losers e
+ * Grande Final da dupla/tripla eliminação (uma rodada com N confrontos
+ * sempre tem 2N times disputando, não importa a seção).
+ */
+export function bestOfFor(t: Tournament, match: Match): BestOf {
+  const override = t.config.bestOfKoOverride
+  if (!override) return t.config.bestOf
+  const round = bracketRoundOf(t, match.id)
+  if (!round) return t.config.bestOf
+  const teamsInRound = round.matches.length * 2
+  return teamsInRound <= override.fromTeams ? override.bestOf : t.config.bestOf
+}
+
 function simContextFor(t: Tournament, match: Match, koSet: Set<string>): SimContext {
   const base = {
     sport: t.sport,
     chaos: chaosOf(t.config),
-    bestOf: t.config.bestOf,
+    bestOf: bestOfFor(t, match),
     game: t.config.game
   }
   const leg = legInfo(t, match.id)

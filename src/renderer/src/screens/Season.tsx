@@ -46,7 +46,8 @@ import { eraHeadToHead, eraClubRanking } from '../lib/season-insights'
 import { presetsForSport } from '../data/teams'
 import { collectionsForSport, collectionsGrouped } from '../data/collections'
 import { seasonPresetsGrouped, type SeasonPreset } from '../data/season-presets'
-import { FORMAT_META, GAME_META, SPORT_META, FORMATS, ESPORTS_GAMES } from '../lib/meta'
+import { FORMAT_META, GAME_META, SPORT_META, FORMATS, ESPORTS_GAMES, KO_CAPABLE_FORMATS, KO_OVERRIDE_TIERS } from '../lib/meta'
+import { roundName } from '../engine/bracket'
 import { Button, Modal, Segmented, Stepper, Toggle } from '../components/ui'
 import { seasonFlow, seasonHasFlow, type SlotFlow } from '../lib/season-explainer'
 import { createTournament, simulateAll } from '../engine/tournament'
@@ -1503,6 +1504,42 @@ function SlotEditor({
                   onChange={(v) => updateConfig({ bestOf: v as BestOf })}
                   options={([1, 3, 5] as BestOf[]).map((b) => ({ value: b, label: `BO${b}` }))}
                 />
+              </div>
+            )}
+            {sport === 'esports' && KO_CAPABLE_FORMATS.includes(slot.format) && (
+              <div className="flex w-full flex-col gap-1.5">
+                <span className="text-xs text-zinc-400">Trocar de série numa fase do mata-mata</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    className="input w-auto py-1.5 text-xs"
+                    value={slot.config.bestOfKoOverride?.fromTeams ?? ''}
+                    onChange={(e) =>
+                      updateConfig({
+                        bestOfKoOverride: e.target.value
+                          ? { fromTeams: Number(e.target.value), bestOf: slot.config.bestOfKoOverride?.bestOf ?? 5 }
+                          : undefined
+                      })
+                    }
+                  >
+                    <option value="">Não trocar</option>
+                    {KO_OVERRIDE_TIERS.map((n) => (
+                      <option key={n} value={n}>
+                        A partir de: {roundName(n)}
+                      </option>
+                    ))}
+                  </select>
+                  {slot.config.bestOfKoOverride && (
+                    <Segmented
+                      value={slot.config.bestOfKoOverride.bestOf}
+                      onChange={(v) =>
+                        updateConfig({
+                          bestOfKoOverride: { fromTeams: slot.config.bestOfKoOverride!.fromTeams, bestOf: v as BestOf }
+                        })
+                      }
+                      options={([1, 3, 5] as BestOf[]).map((b) => ({ value: b, label: `BO${b}` }))}
+                    />
+                  )}
+                </div>
               </div>
             )}
             {(slot.format === 'league' || slot.format === 'groups') && (

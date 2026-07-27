@@ -205,6 +205,18 @@ export interface TournamentConfig {
   playoffQualifiers?: number
   /** mata-mata em ida e volta (agregado), exceto a final — só futebol */
   twoLeggedKO?: boolean
+  /**
+   * e-sports: troca a série a partir de uma fase do mata-mata (ex.: Semifinal
+   * vira BO5 mesmo com o resto em BO3) — comum em circuitos reais (VCT, CS
+   * Majors). `fromTeams` é o nº de times na rodada (2 = só a Final, 4 = a
+   * partir da Semifinal, 8 = a partir das Quartas...); qualquer rodada do
+   * mata-mata com `nº de times <= fromTeams` usa este `bestOf` em vez do
+   * `bestOf` geral do campeonato. Vale pra `cup`, a fase de mata-mata de
+   * `groups`/`league-playoffs`, e as rodadas de Winners/Losers/Grande Final
+   * da dupla/tripla eliminação (`nº de times` = confrontos concorrentes ×2,
+   * inclusive nas rodadas da chave inferior).
+   */
+  bestOfKoOverride?: { fromTeams: number; bestOf: BestOf }
 }
 
 export type TournamentPhase = 'league' | 'group' | 'knockout' | 'swiss' | 'finished'

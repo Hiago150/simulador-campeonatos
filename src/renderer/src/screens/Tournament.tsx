@@ -23,6 +23,7 @@ import { useHistory } from '../store/history'
 import { useSeasons } from '../store/season'
 import { FORMAT_META, GAME_META, SPORT_META } from '../lib/meta'
 import {
+  bestOfFor,
   currentRoundInfo,
   teamFormLevel
 } from '../engine/tournament'
@@ -396,7 +397,7 @@ export function TournamentScreen() {
         home={selectedMatch ? teams[selectedMatch.homeId] : undefined}
         away={selectedMatch ? teams[selectedMatch.awayId] : undefined}
         sport={t.sport}
-        bestOf={t.config.bestOf}
+        bestOf={selectedMatch ? bestOfFor(t, selectedMatch) : t.config.bestOf}
         form={formMapOf(t)}
         onClose={() => setSelectedMatchId(null)}
         onSimulate={simMatch}

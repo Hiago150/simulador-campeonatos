@@ -70,3 +70,8 @@ export const GAME_META: Record<EsportsGame, { label: string; short: string; emoj
 }
 
 export const ESPORTS_GAMES: EsportsGame[] = ['cs2', 'valorant']
+
+/** formatos com fase de mata-mata (bracket) — só neles faz sentido trocar a série por fase */
+export const KO_CAPABLE_FORMATS: Format[] = ['cup', 'groups', 'league-playoffs', 'double-elim', 'triple-elim']
+/** opções de "a partir de qual fase" pro `bestOfKoOverride` — nº de times na rodada, rotulado via `roundName` */
+export const KO_OVERRIDE_TIERS = [2, 4, 8, 16, 32, 64]

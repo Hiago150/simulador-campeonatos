@@ -15,6 +15,8 @@ export interface SeasonPresetSlot {
     groupCount?: number
     qualifiersPerGroup?: number
     swissRounds?: number
+    /** troca de série a partir de uma fase — ver `TournamentConfig.bestOfKoOverride` */
+    bestOfKoOverride?: { fromTeams: number; bestOf: BestOf }
   }
   teamIds: string[]
   /**
@@ -165,7 +167,8 @@ function vctMastersStage(
       name: `${label} — Playoffs`,
       format: 'double-elim',
       game: 'valorant',
-      config: { bestOf: 3 },
+      // Semifinal e Final em BO5 (real): Quartas continuam BO3
+      config: { bestOf: 3, bestOfKoOverride: { fromTeams: 4, bestOf: 5 } },
       teamIds: [],
       phaseLabel,
       qualifiesFrom: [
@@ -184,7 +187,8 @@ const VALORANT_SLOTS: SeasonPresetSlot[] = [
       name: `VCT ${r.label} — Kickoff`,
       format: 'triple-elim',
       game: 'valorant',
-      config: { bestOf: 3 },
+      // só a Grande Final em BO5 (real): o resto da chave é BO3
+      config: { bestOf: 3, bestOfKoOverride: { fromTeams: 2, bestOf: 5 } },
       teamIds: r.teams,
       phaseLabel: 'Kickoff',
       weight: 1, // título regional de abertura — base da hierarquia
@@ -242,7 +246,8 @@ const VALORANT_SLOTS: SeasonPresetSlot[] = [
       name: `VCT ${r.label} — Stage 2 · Playoffs`,
       format: 'cup',
       game: 'valorant',
-      config: { bestOf: 3 },
+      // Semifinal e Final em BO5 (real): Quartas continuam BO3
+      config: { bestOf: 3, bestOfKoOverride: { fromTeams: 4, bestOf: 5 } },
       teamIds: [],
       phaseLabel: 'Stage 2',
       weight: 1.5, // título regional do Stage 2 — vale mais que Kickoff/Stage 1
@@ -257,7 +262,8 @@ const VALORANT_SLOTS: SeasonPresetSlot[] = [
     name: 'VCT Champions',
     format: 'groups',
     game: 'valorant',
-    config: { groupCount: 4, qualifiersPerGroup: 2, bestOf: 3 },
+    // Semifinal e Final em BO5 (real): Quartas continuam BO3
+    config: { groupCount: 4, qualifiersPerGroup: 2, bestOf: 3, bestOfKoOverride: { fromTeams: 4, bestOf: 5 } },
     teamIds: [],
     phaseLabel: 'Champions',
     weight: 3, // o título máximo do ano — topo da hierarquia
